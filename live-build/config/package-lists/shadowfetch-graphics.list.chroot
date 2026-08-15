@@ -1,0 +1,47 @@
+# Shadowfetch graphics & GPU stack — added v1.3.0 "made for work"
+# Broad out-of-the-box GPU support for AMD + Intel (Mesa / Vulkan / VA-API / VDPAU)
+# plus NVIDIA *detection* + DKMS build prerequisites. The proprietary NVIDIA driver
+# itself installs on demand via the one-click `shadowfetch-gpu` helper, because DKMS
+# must compile against the running kernel's headers (can't be reliably prebaked).
+
+# --- GPU firmware (non-free-firmware) ---
+firmware-amd-graphics
+firmware-intel-graphics
+firmware-nvidia-graphics
+
+# --- CPU microcode (security + stability) ---
+amd64-microcode
+intel-microcode
+
+# --- Mesa: AMD + Intel "just works" out of the box ---
+libgl1-mesa-dri
+mesa-vulkan-drivers
+mesa-va-drivers
+mesa-vdpau-drivers
+mesa-opencl-icd
+mesa-utils
+
+# --- Hardware video acceleration (VA-API + VDPAU) ---
+va-driver-all
+intel-media-va-driver-non-free
+i965-va-driver
+vainfo
+vdpauinfo
+
+# --- Vulkan + OpenCL probes ---
+libvulkan1
+vulkan-tools
+clinfo
+
+# --- X11 video drivers (X11 sessions / NVIDIA default) ---
+xserver-xorg-video-all
+
+# --- NVIDIA: DKMS build prereq only (driver installs on demand via shadowfetch-gpu).
+#     nvidia-detect/nvidia-legacy-check are intentionally NOT shipped: the modern
+#     nvidia-open (610+) transaction supersedes them, and shipping them forced a
+#     package removal that the --no-remove safety policy (correctly) refused. ---
+dkms
+mokutil
+
+# --- X11 session (so NVIDIA users can choose Plasma (X11); Wayland stays default) ---
+xserver-xorg

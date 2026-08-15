@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install Shadowfetch Linux
+GenericName=Calamares Installer
+Exec=calamares-install-debian
+Comment=Install Shadowfetch Linux to your computer
+Keywords=calamares;system;install;shadowfetch;installer;
+Icon=shadowfetch
+Terminal=false
+Categories=Qt;System;
+StartupWMClass=calamares
+StartupNotify=true

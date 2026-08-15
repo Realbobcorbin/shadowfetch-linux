@@ -1,0 +1,30 @@
+#!/bin/sh
+set -e
+
+sync_os_release() {
+    source=/usr/share/shadowfetch/os-release.shadowfetch
+    version_file=/usr/share/shadowfetch/version
+
+    [ -s "$source" ] && [ -s "$version_file" ] || return 0
+    version=$(cat "$version_file")
+    grep -Fqx 'ID=shadowfetch' "$source"
+    grep -Fqx "VERSION_ID=\"$version\"" "$source"
+
+    if ! cmp -s "$source" /usr/lib/os-release; then
+        install -m 0644 "$source" /usr/lib/os-release
+    fi
+    if [ -e /etc/os-release ] && [ ! -L /etc/os-release ] \
+        && ! cmp -s "$source" /etc/os-release; then
+        install -m 0644 "$source" /etc/os-release
+    fi
+}
+
+case "$1" in
+    configure|triggered)
+        sync_os_release
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

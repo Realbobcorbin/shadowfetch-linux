@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Shadowfetch Ember Session Helper
+Comment=Keeps file indexing paused if Ember Mode is active at login
+Exec=shadowfetch-ember-session
+Icon=shadowfetch
+Terminal=false
+NoDisplay=true
+X-KDE-autostart-phase=2
+OnlyShowIn=KDE;

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Fireproof Updates
+GenericName=System Updates
+Comment=Updates that warn before removing anything, wrap themselves in a Phoenix Point, and verify your system afterward
+Exec=shadowfetch-fireproof
+Icon=system-software-update
+Terminal=false
+Categories=Qt;KDE;System;
+Keywords=update;upgrade;apt;snapshot;rollback;phoenix;fireproof;
+StartupNotify=true

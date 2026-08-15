@@ -1,0 +1,12 @@
+[Unit]
+Description=Shadowfetch: set wireless regulatory domain from system locale
+After=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/shadowfetch/regdomain.sh
+
+[Install]
+WantedBy=multi-user.target

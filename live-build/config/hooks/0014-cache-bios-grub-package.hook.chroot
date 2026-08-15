@@ -1,0 +1,34 @@
+#!/bin/sh
+# Cache the exact grub-pc metapackage needed to convert an offline BIOS target
+# from the UEFI maintenance package shipped by the hybrid live image.
+set -eu
+
+DESTINATION=/usr/share/shadowfetch/installer-packages
+VERSION=$(dpkg-query -W -f='${Version}' grub-pc-bin)
+ARCHITECTURE=$(dpkg --print-architecture)
+TEMPORARY=$(mktemp -d)
+trap 'rm -rf "$TEMPORARY"' EXIT HUP INT TERM
+chmod 0755 "$TEMPORARY"
+
+cd "$TEMPORARY"
+apt-get download "grub-pc=$VERSION"
+set -- ./*.deb
+if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+  echo "ERROR: expected one grub-pc package for version $VERSION" >&2
+  exit 1
+fi
+
+PACKAGE=$(dpkg-deb --field "$1" Package)
+PACKAGE_VERSION=$(dpkg-deb --field "$1" Version)
+PACKAGE_ARCHITECTURE=$(dpkg-deb --field "$1" Architecture)
+if [ "$PACKAGE" != "grub-pc" ] || [ "$PACKAGE_VERSION" != "$VERSION" ] || [ "$PACKAGE_ARCHITECTURE" != "$ARCHITECTURE" ]; then
+  echo "ERROR: downloaded BIOS GRUB package metadata does not match the live image" >&2
+  exit 1
+fi
+
+install -d -m 0755 "$DESTINATION"
+install -m 0644 "$1" "$DESTINATION/grub-pc.deb"
+(
+  cd "$DESTINATION"
+  sha256sum grub-pc.deb > grub-pc.deb.sha256
+)

@@ -1,0 +1,66 @@
+name: Hardware report
+description: Share install, boot, update, local-AI, and device behavior for a specific machine.
+title: "[Hardware]: "
+labels: ["hardware-report", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hardware reports help build the community test matrix. Use Discussions for support questions before opening a bug.
+        Do not attach secrets, password CSVs, or unredacted private diagnostics.
+  - type: input
+    id: computer_model
+    attributes:
+      label: Computer model
+      placeholder: Framework Laptop 13, ThinkPad T14, custom desktop, etc.
+    validations:
+      required: true
+  - type: dropdown
+    id: firmware
+    attributes:
+      label: Firmware / boot mode
+      options:
+        - UEFI
+        - Legacy BIOS
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware details
+      description: CPU, GPU, RAM, storage, Wi-Fi/Bluetooth chipset if known.
+    validations:
+      required: true
+  - type: dropdown
+    id: live_boot
+    attributes:
+      label: Did the live session boot?
+      options:
+        - "Yes"
+        - "No"
+        - Not tested
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Did installation complete?
+      options:
+        - "Yes"
+        - "No"
+        - Not tested
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: What worked?
+      description: First login, updates, local AI setup, audio, Wi-Fi, Bluetooth, suspend/resume, GPU acceleration.
+    validations:
+      required: true
+  - type: textarea
+    id: manual_changes
+    attributes:
+      label: Manual changes needed
+      description: Include workarounds or settings you changed manually.

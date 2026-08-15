@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Shadowfetch first-login setup
+Comment=Apply Shadowfetch wallpaper, theme and premium panel on first login. Self-disables.
+Exec=/usr/lib/shadowfetch/first-login.sh
+X-KDE-autostart-phase=2
+OnlyShowIn=KDE;
+Terminal=false
+NoDisplay=true

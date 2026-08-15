@@ -1,0 +1,30 @@
+[Unit]
+Description=Shadowfetch Fireproof update daemon
+Documentation=https://shadowfetch.com/linux/
+# Analyze is side-effect free; the dpkg frontend lock is taken only at
+# commit. The daemon is D-Bus activated (org.shadowfetch.Fireproof1) and
+# has no [Install] section on purpose: it starts when a client asks.
+
+[Service]
+Type=dbus
+BusName=org.shadowfetch.Fireproof1
+ExecStart=/usr/libexec/fireproofd
+Restart=on-failure
+RestartSec=5
+# A stop during the commit phase is DEFERRED by the daemon until dpkg
+# finishes (a SIGTERM must never abort a dpkg transaction). Give that
+# window a full hour before systemd escalates to SIGKILL.
+TimeoutStopSec=3600
+
+# Hardening: the firewatchd pattern minus apt's write paths. ProtectSystem/
+# ProtectHome/ProtectKernelTunables stay OFF because the commit phase runs
+# dpkg and maintainer scripts, which legitimately write /usr, /etc, /var,
+# /boot and occasionally poke /proc/sys (procps triggers). What can be
+# locked down without breaking dpkg, is:
+LockPersonality=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+# No listening sockets, ever: the only network traffic is the archive
+# download the user explicitly clicked for, via apt's configured mirrors.

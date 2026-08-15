@@ -1,0 +1,14 @@
+{
+  "id": "power-btrfs-assistant",
+  "name": "Btrfs Assistant",
+  "kind": "apt",
+  "packages": ["btrfs-assistant"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": null,
+  "license": "GPL-3.0 (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["btrfs"],
+  "section": "power",
+  "blurb": "Advanced snapshot and subvolume management alongside Phoenix - for power users who want the full Btrfs picture."
+}

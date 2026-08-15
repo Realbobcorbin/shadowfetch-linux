@@ -1,0 +1,302 @@
+#!/usr/bin/env python3
+"""fireproof - Shadowfetch Fireproof updates from one command.
+
+This CLI is also the QEMU test harness: every daemon behaviour is
+reachable from here without a desktop session.
+"""
+
+import json
+import subprocess
+import sys
+import threading
+
+USAGE = """fireproof - Shadowfetch Fireproof safe updates.
+
+USAGE
+  fireproof check          analyze the pending update; change nothing,
+                           lock nothing, download nothing
+  fireproof update [-y]    apply the update through the full Fireproof
+                           protocol (lock at commit, hash re-check, NEWS
+                           gate, Phoenix Point naming, verify battery);
+                           -y answers the NEWS gate with Proceed
+  fireproof verify         re-run the post-update verify battery
+  fireproof rollback       restore the Phoenix Point recorded for the
+                           last update (pkexec /usr/libexec/phoenix-restore)
+
+WHAT IT DOES
+  Talks to fireproofd (org.shadowfetch.Fireproof1 on the system bus).
+  Updates warn before removing anything, wrap themselves in a Phoenix
+  Point, and verify the system afterward.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/"""
+
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    print(USAGE)
+    raise SystemExit(0)
+if sys.argv[1] == "--version":
+    try:
+        v = open("/usr/share/shadowfetch/version").read().strip()
+    except OSError:
+        v = "unknown"
+    print("fireproof (Shadowfetch Linux) " + v)
+    raise SystemExit(0)
+
+import dbus
+import dbus.mainloop.glib
+from gi.repository import GLib
+
+BUS_NAME = "org.shadowfetch.Fireproof1"
+OBJ_PATH = "/org/shadowfetch/Fireproof1"
+IFACE = "org.shadowfetch.Fireproof1"
+
+BOLD = "\033[1m"
+GOLD = "\033[1;33m"
+RED = "\033[1;31m"
+GREEN = "\033[1;32m"
+OFF = "\033[0m"
+
+
+def say(msg):
+    print("\n%s%s%s" % (GOLD, msg, OFF))
+
+
+def iface():
+    bus = dbus.SystemBus()
+    return dbus.Interface(bus.get_object(BUS_NAME, OBJ_PATH), IFACE)
+
+
+def human_mb(n):
+    return "%.1f MB" % (n / (1024.0 * 1024.0))
+
+
+def print_analysis(a):
+    c = a["counts"]
+    b = a["banners"]
+    say("Fireproof analyze - nothing has been locked or downloaded")
+    print("  %d upgrade, %d new, %d removal, %d library rename - %s download"
+          % (c["upgrade"], c["install"], c["remove"], c["rename"],
+             human_mb(c["download_bytes"])))
+    if b["kernel"]:
+        print("  %s!!%s New kernel: %s - %s"
+              % (RED, OFF, ", ".join(b["kernel"]["packages"]),
+                 b["kernel"]["note"]))
+    if b["nvidia"]:
+        print("  %s!!%s %s" % (RED, OFF, b["nvidia"]["note"]))
+    if b["major_transition"]:
+        print("  %s!!%s Major transition: this is a large update - read the "
+              "list below before proceeding" % (RED, OFF))
+    if b["same_set_rollback"]:
+        print("  %s!!%s This is the same update that was rolled back on %s - "
+              "default is Don't proceed"
+              % (RED, OFF, b["same_set_rollback"]["date"]))
+    if not b["phoenix_available"]:
+        print("  %s!!%s No Phoenix Point - rollback unavailable on this "
+              "filesystem or with apt snapshots disabled" % (RED, OFF))
+    reds = [p for p in a["upgrades"] + a["installs"] + a["removals"] if p["red"]]
+    if reds:
+        print("\n  %sCritical packages in this update (red):%s" % (BOLD, OFF))
+        for p in reds:
+            arrow = ("%s -> %s" % (p["installed"], p["candidate"])
+                     if p["installed"] and p["candidate"]
+                     else (p["candidate"] or "remove %s" % p["installed"]))
+            print("    %s  (%s)" % (p["name"], arrow))
+    if a["removals"]:
+        print("\n  %sRemovals:%s" % (BOLD, OFF))
+        for p in a["removals"]:
+            print("    %s  (%s)" % (p["name"], p["installed"]))
+    if a["library_renames"]:
+        print("\n  %sLibrary renames (same library, new name):%s" % (BOLD, OFF))
+        for r in a["library_renames"]:
+            print("    %s -> %s  (%s)" % (r["from"], r["to"], r["version"]))
+    if a["holds"]:
+        print("\n  %sHeld packages (pinned, will not update):%s" % (BOLD, OFF))
+        for h in a["holds"]:
+            print("    %s  (%s held; %s available)"
+                  % (h["name"], h["installed"], h["candidate"]))
+    print("\n  Kept-back story: %s" % a["kept_back"]["story"])
+    print("  Change-set hash: %s" % a["change_set_hash"])
+
+
+def print_verify(v):
+    say("Verify battery")
+    marks = {"pass": GREEN + "OK " + OFF, "warn": GOLD + "?? " + OFF,
+             "fail": RED + "!! " + OFF}
+    for chk in v["checks"]:
+        print("  %s %s" % (marks.get(chk["status"], "   "), chk["label"]))
+        if chk["status"] != "pass":
+            print("        %s" % chk["detail"])
+    verdict = v["verdict"]
+    if verdict == "ok":
+        print("\n  %sAll checks passed.%s" % (GREEN, OFF))
+    elif verdict == "reboot-recommended":
+        print("\n  %sContinue, reboot recommended.%s" % (GOLD, OFF))
+    else:
+        print("\n  %sRestore recommended.%s Your system is protected by "
+              "Phoenix Point #%s - run: fireproof rollback"
+              % (RED, OFF, v.get("restore_point")))
+
+
+def cmd_check():
+    print_analysis(json.loads(iface().Analyze(timeout=300)))
+    return 0
+
+
+def cmd_update(assume_yes):
+    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    fp = iface()
+    analysis = json.loads(fp.Analyze(timeout=300))
+    print_analysis(analysis)
+    if analysis["counts"]["total"] == 0:
+        print("\nNothing to update.")
+        return 0
+    default_no = analysis["banners"]["default_dont_proceed"]
+    prompt = ("Proceed with the update? [y/N] " if default_no
+              else "Proceed with the update? [Y/n] ")
+    try:
+        answer = input("\n" + prompt).strip().lower()
+    except EOFError:
+        answer = ""
+    proceed = (answer == "y") if default_no else (answer in ("", "y"))
+    if not proceed:
+        print("Nothing was changed.")
+        return 0
+
+    loop = GLib.MainLoop()
+    exit_code = [1]
+
+    def on_progress(phase, percent, message):
+        if phase in ("download", "install"):
+            print("\r  [%3d%%] %-70.70s" % (percent, message), end="", flush=True)
+        elif phase == "lock-wait":
+            print("\n  %s" % message)
+        elif phase == "phase":
+            print("\n%s%s%s" % (GOLD, {
+                "locking": "Taking the package lock (commit only - analyze "
+                           "never held it)",
+                "revalidating": "Re-checking the update under the lock",
+                "downloading": "Downloading packages (cancellable - nothing "
+                               "installs yet)",
+                "news": "Checking release NEWS",
+                "committing": "Installing (safe to leave running; cancel is "
+                              "disabled)",
+                "verifying": "Running the verify battery",
+            }.get(message, message), OFF))
+
+    def on_news(txn, text):
+        def ask():
+            print("\n" + BOLD + "Release NEWS for this update:" + OFF)
+            print(text)
+            if assume_yes:
+                print("\n  -y given: proceeding past the NEWS gate.")
+                fp.ProceedCommit(timeout=600)
+                return
+            try:
+                a = input("\nProceed past the NEWS gate? [y/N] ").strip().lower()
+            except EOFError:
+                a = ""
+            (fp.ProceedCommit if a == "y" else fp.AbortCommit)(timeout=600)
+        threading.Thread(target=ask, daemon=True).start()
+
+    def on_drift(analysis_json):
+        print("\n%s!!%s The update changed while you were reading - review "
+              "again:" % (RED, OFF))
+        print_analysis(json.loads(analysis_json))
+        exit_code[0] = 2
+        loop.quit()
+
+    def on_finished(result_json):
+        result = json.loads(result_json)
+        print()
+        if result.get("verify"):
+            print_verify(result["verify"])
+        if result.get("message"):
+            print("\n  %s" % result["message"])
+        exit_code[0] = 0 if result.get("ok") else 1
+        loop.quit()
+
+    bus = dbus.SystemBus()
+    bus.add_signal_receiver(on_progress, "Progress", IFACE, BUS_NAME)
+    bus.add_signal_receiver(on_news, "NewsReady", IFACE, BUS_NAME)
+    bus.add_signal_receiver(on_drift, "DriftDetected", IFACE, BUS_NAME)
+    bus.add_signal_receiver(on_finished, "Finished", IFACE, BUS_NAME)
+    fp.Update(analysis["change_set_hash"], timeout=600)
+    loop.run()
+    return exit_code[0]
+
+
+def cmd_verify():
+    print_verify(json.loads(iface().Verify(timeout=600)))
+    return 0
+
+
+def cmd_rollback():
+    target = json.loads(iface().RollbackTarget())
+    if not target.get("phoenix_available"):
+        print("No Phoenix Point - rollback unavailable (Phoenix Points "
+              "require the Btrfs filesystem, chosen at install).")
+        return 1
+    if target.get("point") is None:
+        print("No recorded pre-update Point to restore.")
+        return 1
+    say("Rollback")
+    print("  Target: Phoenix Point #%s (the first pre-snapshot of the last "
+          "update transaction)" % target["point"])
+    try:
+        answer = input("\nRestore this Point now? The system should be "
+                       "rebooted afterwards. [y/N] ").strip().lower()
+    except EOFError:
+        answer = ""
+    if answer != "y":
+        print("Nothing was changed.")
+        return 0
+    rc = subprocess.call(["pkexec", "/usr/libexec/phoenix-restore",
+                          str(target["point"])])
+    if rc == 0:
+        if target.get("txn"):
+            try:
+                iface().RecordRollback(target["txn"])
+            except dbus.DBusException:
+                pass
+        print("\n%sRestored.%s Reboot to boot the restored system. The next "
+              "analyze will warn if the same update is offered again."
+              % (GREEN, OFF))
+    else:
+        print("\n%sphoenix-restore exited with status %d.%s" % (RED, rc, OFF))
+    return rc
+
+
+def main():
+    cmd = sys.argv[1]
+    try:
+        if cmd == "check":
+            return cmd_check()
+        if cmd == "update":
+            return cmd_update("-y" in sys.argv[2:])
+        if cmd == "verify":
+            return cmd_verify()
+        if cmd == "rollback":
+            return cmd_rollback()
+    except dbus.DBusException as e:
+        # fireproofd raises typed errors: report them for what they are
+        # instead of blaming the bus connection.
+        name = e.get_dbus_name() or ""
+        if name == IFACE + ".NotAuthorized":
+            print("fireproof: not authorized: %s" % e.get_dbus_message(),
+                  file=sys.stderr)
+        elif name == IFACE + ".Busy":
+            print("fireproof: busy: %s" % e.get_dbus_message(),
+                  file=sys.stderr)
+        elif name.startswith(IFACE + "."):
+            print("fireproof: %s: %s" % (name.rsplit(".", 1)[-1],
+                                         e.get_dbus_message()),
+                  file=sys.stderr)
+        else:
+            print("fireproof: cannot reach fireproofd on the system bus: %s"
+                  % e.get_dbus_message(), file=sys.stderr)
+        return 1
+    print(USAGE, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

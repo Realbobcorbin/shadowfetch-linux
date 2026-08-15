@@ -1,0 +1,43 @@
+Source: shadowfetch-ember
+Section: admin
+Priority: optional
+Maintainer: Shadowfetch Project <signing@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://shadowfetch.com/linux/
+
+Package: shadowfetch-ember
+Architecture: amd64
+Depends:
+ ${misc:Depends},
+ python3 (>= 3.11),
+ python3-dbus,
+ python3-gi,
+ dbus,
+ systemd,
+ polkitd
+Recommends:
+ power-profiles-daemon,
+ linux-cpupower,
+ shadowfetch-firewatchd
+Description: Shadowfetch Ember Mode engine (one switch, auto-return to Balanced)
+ Ember Mode is the Fire Edition speed switch. When armed it holds the
+ 'performance' power profile via power-profiles-daemon (falling back to
+ the cpupower governor on hardware without a ppd performance profile),
+ pauses a small curated list of background services (PackageKit, fwupd,
+ ModemManager -- each behind a gate condition, each crash-safe), and
+ tilts CPU scheduling toward the user session with a runtime
+ CPUWeight=40 drop-in on system.slice.
+ .
+ It always returns to Balanced: the profile hold dies with the daemon's
+ D-Bus connection, an idempotent restore tool undoes every recorded
+ mutation as ExecStartPre and ExecStopPost, an idle watchdog (driven by
+ work-only load figures from Firewatch, never by chassis temperature)
+ extinguishes after ten quiet minutes, and every mutation is
+ --runtime/tmpfs so a power cut reverts by reboot.
+ .
+ Status is published read-only on the system bus as
+ com.shadowfetch.Ember1. The active console user can flip the switch
+ without a password (polkit rule); sampling, the effective-load index
+ and the flame display belong to shadowfetch-firewatchd, and the switch
+ UI lives in the Shadowfetch Control Center.

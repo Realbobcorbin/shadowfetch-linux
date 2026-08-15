@@ -1,0 +1,14 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this space for support questions, installation notes, and hardware observations that are not yet reproducible bugs.
+        If you have a reproducible bug, use the Bug report issue template instead.
+        Do not post password CSVs, secrets, tokens, or unredacted private diagnostics.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question or report
+      description: Include the ISO filename, boot mode, hardware model, and what you tried when useful.
+    validations:
+      required: true

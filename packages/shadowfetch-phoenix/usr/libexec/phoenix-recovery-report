@@ -1,0 +1,133 @@
+#!/bin/sh
+# phoenix-recovery-report - export a privacy-safe recovery bundle.
+# Part of Shadowfetch Linux 2.1.2 "Fire Edition". Run via pkexec
+# (polkit action org.shadowfetch.phoenix.recovery-report).
+#
+# The bundle contains ONLY system-diagnostic material: this boot's error-level
+# journal (hostnames stripped), apt history, the Phoenix Point list, dmesg,
+# block-device layout, Btrfs usage, failed units, SMART summaries, and the
+# OS version. No user files, no network credentials, no serial numbers where
+# the tool offers a privacy switch (inxi runs with -z when present).
+# Nothing is uploaded anywhere: the tarball lands on the local disk and the
+# user decides what to do with it.
+
+set -u
+
+case "${1:-}" in
+  -h|--help)
+    cat <<'SFHELP'
+phoenix-recovery-report - export a privacy-safe diagnostic bundle.
+
+USAGE
+  phoenix-recovery-report [OUTPUT.tar.gz]
+
+Collects: journalctl -b -p err (no hostnames), apt history.log, snapper
+list, dmesg, lsblk, btrfs filesystem usage, systemctl --failed, smartctl
+JSON summaries, os-release. Default output:
+  /var/lib/shadowfetch/recovery-reports/recovery-report-<timestamp>.tar.gz
+
+Nothing leaves this machine.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+    exit 0 ;;
+  --version)
+    echo "phoenix-recovery-report (Shadowfetch Linux) $(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"; exit 0 ;;
+esac
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "phoenix-recovery-report: must run as root (use pkexec phoenix-recovery-report)" >&2
+    exit 1
+fi
+
+TS=$(date +%Y%m%d-%H%M%S)
+OUTDIR=/var/lib/shadowfetch/recovery-reports
+OUT="${1:-$OUTDIR/recovery-report-$TS.tar.gz}"
+
+WORK=$(mktemp -d /tmp/phoenix-report.XXXXXX)
+DIR="$WORK/recovery-report-$TS"
+mkdir -p "$DIR"
+cleanup() { rm -rf "$WORK"; }
+trap cleanup EXIT INT TERM
+
+collect() {
+    # collect <outfile> <cmd...>: best-effort, never aborts the report.
+    out="$DIR/$1"; shift
+    if command -v "$1" >/dev/null 2>&1; then
+        "$@" > "$out" 2>&1 || echo "[phoenix-recovery-report: '$*' exited non-zero]" >> "$out"
+    else
+        echo "[phoenix-recovery-report: '$1' not installed]" > "$out"
+    fi
+}
+
+# --- System identity (version only, no hostname) ---------------------------
+collect os-release.txt cat /etc/os-release
+if [ -r /usr/share/shadowfetch/version ]; then
+    cp /usr/share/shadowfetch/version "$DIR/shadowfetch-version.txt" 2>/dev/null || true
+fi
+
+# --- Logs ------------------------------------------------------------------
+collect journal-errors.txt journalctl -b -p err --no-pager --no-hostname
+collect dmesg.txt dmesg --color=never
+collect failed-units.txt systemctl --failed --no-pager --no-legend
+
+# --- Packages --------------------------------------------------------------
+if [ -r /var/log/apt/history.log ]; then
+    cp /var/log/apt/history.log "$DIR/apt-history.log" 2>/dev/null || true
+else
+    echo "[no /var/log/apt/history.log]" > "$DIR/apt-history.log"
+fi
+collect dpkg-audit.txt dpkg --audit
+
+# --- Phoenix Points + storage ----------------------------------------------
+if command -v snapper >/dev/null 2>&1 && [ -f /etc/snapper/configs/root ]; then
+    snapper --no-dbus -c root list > "$DIR/phoenix-points.txt" 2>&1 || true
+else
+    echo "[snapper not configured - non-Btrfs install or first boot not completed]" > "$DIR/phoenix-points.txt"
+fi
+collect lsblk.txt lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS
+if [ "$(stat -f -c %T / 2>/dev/null)" = "btrfs" ]; then
+    collect btrfs-usage.txt btrfs filesystem usage /
+else
+    echo "[/ is not Btrfs]" > "$DIR/btrfs-usage.txt"
+fi
+
+# --- Drive health (JSON summaries, one file per disk) ----------------------
+if command -v smartctl >/dev/null 2>&1 && command -v lsblk >/dev/null 2>&1; then
+    lsblk -dn -o NAME,TYPE 2>/dev/null | while read -r name type; do
+        [ "$type" = "disk" ] || continue
+        smartctl --json=c -a "/dev/$name" > "$DIR/smart-$name.json" 2>&1 || true
+    done
+else
+    echo "[smartctl not installed]" > "$DIR/smart-unavailable.txt"
+fi
+
+# --- Optional hardware summary with inxi's privacy filter ------------------
+if command -v inxi >/dev/null 2>&1; then
+    inxi -Fzy > "$DIR/inxi.txt" 2>&1 || true
+fi
+
+# --- Manifest --------------------------------------------------------------
+{
+    echo "Shadowfetch Phoenix recovery report - $TS"
+    echo "Generated locally by phoenix-recovery-report. Nothing was uploaded."
+    echo ""
+    echo "Contents:"
+    ls -1 "$DIR" | sed 's/^/  /'
+} > "$DIR/README.txt"
+
+# --- Pack ------------------------------------------------------------------
+mkdir -p "$(dirname "$OUT")"
+tar -C "$WORK" -czf "$OUT" "recovery-report-$TS"
+chmod 0644 "$OUT"
+# When launched through pkexec, hand the file to the requesting user.
+if [ -n "${PKEXEC_UID:-}" ]; then
+    case "$PKEXEC_UID" in
+      *[!0-9]*) : ;;
+      *) chown "$PKEXEC_UID" "$OUT" 2>/dev/null || true ;;
+    esac
+fi
+
+echo "Recovery report written to:"
+echo "  $OUT"
+exit 0

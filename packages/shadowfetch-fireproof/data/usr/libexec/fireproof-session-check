@@ -1,0 +1,56 @@
+#!/bin/sh
+# fireproof-session-check - session-side half of the postboot protocol,
+# plus the proactive login notification.
+#
+# Runs from XDG autostart.
+#
+# 1) RECOVERY: if fireproof-postboot flagged the previous boot as a
+#    post-update graphical failure, open recovery preselecting the
+#    recorded Phoenix Point. Per the Control Center IA every deep link
+#    lands in the one KDBusService Control Center window:
+#    shadowfetch-control --page recover:point=<N>. This also covers the
+#    Phoenix overlay session: booting a "Last Known Good Flame" entry
+#    after a failed update lands here, and the restore path works from
+#    inside the overlay.
+#
+# 2) NOTIFICATION: otherwise, ask fireproofd (side-effect-free Analyze)
+#    whether updates are pending. One notify-send at login, honouring
+#    NotifySuppressed - a set that was already rolled back re-analyzes
+#    with its notification suppressed (the sidebar badge stays, muted).
+set -u
+
+MARKER=/run/shadowfetch/fireproof-failed-boot
+BUS=org.shadowfetch.Fireproof1
+OBJ=/org/shadowfetch/Fireproof1
+
+if [ -r "$MARKER" ]; then
+    point=$(head -n 1 "$MARKER" | tr -cd '0-9')
+    if [ -n "$point" ]; then
+        if command -v shadowfetch-control >/dev/null 2>&1; then
+            exec /usr/bin/shadowfetch-control --page "recover:point=$point"
+        fi
+        # Degraded path when the Control Center is not installed.
+        exec /usr/bin/shadowfetch-fireproof --postboot-recover "$point"
+    fi
+    exit 0
+fi
+
+# Proactive login notification. Analyze is side-effect free (no lock, no
+# download) and D-Bus activation starts fireproofd on demand.
+command -v notify-send >/dev/null 2>&1 || exit 0
+command -v busctl >/dev/null 2>&1 || exit 0
+
+busctl --system --timeout=300 call "$BUS" "$OBJ" "$BUS" Analyze >/dev/null 2>&1 || exit 0
+count=$(busctl --system get-property "$BUS" "$OBJ" "$BUS" UpdateCount 2>/dev/null | awk '{print $2}')
+suppressed=$(busctl --system get-property "$BUS" "$OBJ" "$BUS" NotifySuppressed 2>/dev/null | awk '{print $2}')
+
+case "${count:-0}" in
+    ''|*[!0-9]*) exit 0 ;;
+esac
+if [ "$count" -gt 0 ] && [ "${suppressed:-true}" = "false" ]; then
+    notify-send -a "Fireproof Updates" -i system-software-update \
+        "Updates available" \
+        "$count package update(s) are ready. Review them in Fireproof Updates - nothing downloads or installs until you say so." \
+        2>/dev/null || true
+fi
+exit 0

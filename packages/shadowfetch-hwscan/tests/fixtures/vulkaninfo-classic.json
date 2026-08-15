@@ -1,0 +1,30 @@
+{
+ "Vulkan Instance Version": "1.4.341",
+ "GPU0": {
+  "VkPhysicalDeviceProperties": {
+   "apiVersion": "1.4.341",
+   "deviceName": "AMD Radeon RX 6700 XT (RADV NAVI22)",
+   "deviceType": "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
+   "vendorID": 4098,
+   "deviceID": 29663
+  },
+  "VkPhysicalDeviceMemoryProperties": {
+   "memoryHeaps": [
+    {
+     "size": 12884901888,
+     "flags": ["MEMORY_HEAP_DEVICE_LOCAL_BIT"]
+    },
+    {
+     "size": 8589934592,
+     "flags": []
+    }
+   ],
+   "memoryTypes": [
+    {
+     "heapIndex": 0,
+     "propertyFlags": ["MEMORY_PROPERTY_DEVICE_LOCAL_BIT"]
+    }
+   ]
+  }
+ }
+}

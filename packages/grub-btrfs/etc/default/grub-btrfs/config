@@ -1,0 +1,48 @@
+# shellcheck shell=bash
+# Shadowfetch Linux 2.1.4 "Fire Edition" configuration for grub-btrfs
+# (in-house package grub-btrfs 4.14-2). Sourced by 41_snapshots-btrfs.
+# This file is a conffile: local edits survive upgrades.
+
+# The GRUB submenu that lists bootable Phoenix Points. Entries boot the
+# kernel+initrd stored INSIDE each snapshot's own /boot (our Calamares
+# layout keeps /boot inside @, which guarantees that), and the shipped
+# initramfs overlay hook turns the read-only snapshot into a writable
+# tmpfs-overlay session with a /run/phoenix-overlay marker.
+GRUB_BTRFS_SUBMENUNAME="Last Known Good Flame"
+
+# Show at most this many snapshots in the submenu, newest first. Snapper's
+# NUMBER_LIMIT=8 (+4 important) means the volume rarely holds more anyway.
+GRUB_BTRFS_LIMIT="10"
+
+# Booting a read-only snapshot is exactly the point (the overlay hook makes
+# the session writable in RAM), so never hide read-only snapshots.
+GRUB_BTRFS_SHOW_SNAPSHOTS_FOUND="true"
+
+# Report totals while regenerating, useful in the grub-btrfsd journal.
+GRUB_BTRFS_SHOW_TOTAL_SNAPSHOTS_FOUND="true"
+
+# Take snapper's per-snapshot descriptions into the menu titles so an entry
+# reads like "Fireproof: before update <date> (kernel X->Y, N pkgs)" rather
+# than a bare number.
+GRUB_BTRFS_TITLE_FORMAT=("date" "snapshot" "type" "description")
+
+# Where snapper mounts the snapshots on our layout (dedicated top-level
+# @snapshots subvolume mounted here, so Point history survives a root swap).
+GRUB_BTRFS_SNAPSHOT_DIRS=("/.snapshots")
+
+# The kernels, initrds and microcode images are discovered inside each
+# snapshot automatically; keep the defaults (empty = autodetect).
+GRUB_BTRFS_NKERNEL=()
+GRUB_BTRFS_NINIT=()
+GRUB_BTRFS_CUSTOM_MICROCODE=()
+
+# Never boot into a snapshot silently: protection menus stay enabled so a
+# user cannot mistake a Point ride for their real system.
+GRUB_BTRFS_DISABLE="false"
+
+# grub-btrfsd (enabled by phoenix-firstboot) watches /.snapshots with
+# inotify and regenerates grub-btrfs.cfg on every snapshot event, so no
+# daemon-side settings are needed here beyond the default socket behaviour.
+GRUB_BTRFS_GRUB_DIRNAME="/boot/grub"
+GRUB_BTRFS_MKCONFIG=/usr/sbin/grub-mkconfig
+GRUB_BTRFS_SCRIPT_CHECK=grub-script-check

@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# The smartd hook and the daemon must stay executable; dh_fixperms keeps
+# modes from the install step, but be explicit so a source-tree mode
+# reversion (it has happened before: see shadowfetch-defaults 2.0.1-2)
+# cannot ship a dead hook.
+execute_after_dh_fixperms:
+	chmod 0755 debian/shadowfetch-firewatchd/usr/libexec/firewatchd
+	chmod 0755 debian/shadowfetch-firewatchd/etc/smartmontools/smartd_warning.d/firewatch

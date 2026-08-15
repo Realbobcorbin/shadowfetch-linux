@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Browser Migration
+Comment=Validate and import bookmark and password exports
+Exec=konsole -e shadowfetch-browser-import
+Icon=preferences-web-browser-shortcuts
+Terminal=false
+Categories=Settings;
+Keywords=browser;bookmarks;passwords;import;migration;

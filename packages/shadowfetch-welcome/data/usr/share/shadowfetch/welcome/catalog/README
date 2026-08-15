@@ -1,0 +1,42 @@
+Shadowfetch Welcome catalog
+===========================
+
+Static, root-owned JSON records - one file per catalog entry, named
+<id>.json with the file name matching the record's "id" field.  These
+records are the single source both the Welcome assistant (Ignition page,
+media and preset cards) and Control Center > Software & Updates > Bundles
+render from. Local models are owned by Buzz's native Compute workflow, not
+by catalog records or a second Shadowfetch model installer.
+
+Schema (all keys always present):
+
+  id          lowercase [a-z0-9-], matches the file name
+  name        display name for the card
+  kind        apt | preset | template
+  packages    Debian package names (apt/preset only; [] otherwise)
+  url         reserved; null or empty in every 2.1.4 record
+  sha256      reserved; null or empty in every 2.1.4 record
+  size_bytes  download size.  For apt/preset entries this is the
+              named-package sum ("at least"); the ISO build pipeline runs
+              apt-get -s in the build chroot and merges the measured
+              closure over these numbers via sizes.json (judge fold: cards
+              never print estimated closures)
+  license     plain-words license shown on the card
+  min_ram_gb  reserved; 0 or null in 2.1.4 records
+  requires    [] of gates: "none", "nvidia" (shown only when the firstboot
+              GPU-detect flow found NVIDIA), "btrfs"
+  blurb       honest card copy - sizes, speed expectations, caveats
+
+Rules inherited from the 2.1.2 spec:
+
+  * apt/preset entries install through pkexec
+    /usr/libexec/shadowfetch-bundle-install <id> - a single apt
+    transaction against the pinned snapshot + umbra mirrors, wrapped in
+    Phoenix Points by the 79phoenix-space + 80snapper DPkg hooks.
+    Bundles contain ONLY pinned-snapshot Debian packages, never umbra
+    packages, so an offline-saved choice resolves identically forever.
+  * Model selection and download are intentionally outside this catalog.
+    Buzz ranks compatible open models for the detected hardware and downloads
+    the user's selection when shared compute is enabled.
+  * Nothing in the catalog phones home. apt installs happen only after the
+    user confirms and go to the configured mirrors.

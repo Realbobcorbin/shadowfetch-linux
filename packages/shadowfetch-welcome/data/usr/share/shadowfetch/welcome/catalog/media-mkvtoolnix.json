@@ -1,0 +1,14 @@
+{
+  "id": "media-mkvtoolnix",
+  "name": "MKVToolNix",
+  "kind": "apt",
+  "packages": ["mkvtoolnix", "mkvtoolnix-gui"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 11600000,
+  "license": "GPL-2.0 (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "media",
+  "blurb": "Create, inspect and remux Matroska (MKV) containers - command line tools plus the GUI."
+}

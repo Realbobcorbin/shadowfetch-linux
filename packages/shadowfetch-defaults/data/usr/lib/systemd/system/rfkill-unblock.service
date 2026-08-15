@@ -1,0 +1,15 @@
+[Unit]
+Description=Shadowfetch: clear rfkill soft-blocks at boot
+DefaultDependencies=no
+After=systemd-rfkill.service
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+# Some desktops and VMs have no rfkill device. That is a healthy no-op.
+ExecStart=-/usr/sbin/rfkill unblock all
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

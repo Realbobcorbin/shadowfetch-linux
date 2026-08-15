@@ -1,0 +1,82 @@
+#!/bin/sh
+# phoenix-apt-repair -- restore a known-good APT configuration.
+#
+# Phoenix v1 bullet 5: "Repair broken APT sources." The distro owns its entire
+# apt configuration (Debian archive lines + the umbra repo + its signing key),
+# so repair is a diff-and-restore against the copies this package ships in
+# /usr/share/shadowfetch/apt-recovery/ -- no guessing, no network required for
+# the repair itself.
+#
+# Modes:
+#   --check    report drift, change nothing, exit 0 clean / 3 drifted (default)
+#   --repair   restore sources + keyring from the shipped known-good copies
+#              (originals preserved as *.phoenix-bak), then `apt-get update`
+#              to prove the result. Root required.
+set -u
+export PATH=/usr/sbin:/sbin:/usr/bin:/bin
+
+GOOD=/usr/share/shadowfetch/apt-recovery
+SRC=/etc/apt/sources.list
+SFL=/etc/apt/sources.list.d/shadowfetch.list
+KEY=/etc/apt/trusted.gpg.d/shadowfetch.gpg
+STAMP=$(date +%Y%m%d-%H%M%S)
+MODE="${1:---check}"
+
+drift=0
+report() { printf '%s\n' "$*"; }
+
+check_one() {
+    # $1 = live file, $2 = known-good copy
+    if [ ! -f "$1" ]; then
+        report "MISSING: $1"; drift=1
+    elif ! cmp -s "$1" "$2"; then
+        report "DRIFTED: $1 (differs from $2)"; drift=1
+    else
+        report "ok: $1"
+    fi
+}
+
+check_one "$SRC" "$GOOD/debian.sources"
+check_one "$SFL" "$GOOD/umbra.sources"
+if [ ! -f "$KEY" ]; then
+    report "MISSING: $KEY (umbra repository key)"; drift=1
+elif ! cmp -s "$KEY" "$GOOD/umbra-archive-keyring.gpg"; then
+    report "DRIFTED: $KEY"; drift=1
+else
+    report "ok: $KEY"
+fi
+
+if [ "$MODE" = "--check" ]; then
+    [ "$drift" -eq 0 ] && exit 0 || exit 3
+fi
+
+if [ "$MODE" != "--repair" ]; then
+    report "usage: phoenix-apt-repair [--check|--repair]"; exit 2
+fi
+if [ "$(id -u)" != "0" ]; then
+    report "ERROR: --repair requires root (run via pkexec from Control Center)"; exit 1
+fi
+if [ "$drift" -eq 0 ]; then
+    report "nothing to repair"; exit 0
+fi
+
+restore_one() {
+    # $1 = live file, $2 = known-good copy
+    if [ -f "$1" ] && ! cmp -s "$1" "$2"; then
+        cp -p "$1" "$1.phoenix-bak-$STAMP"
+    fi
+    install -m 644 "$2" "$1"
+    report "restored: $1"
+}
+
+restore_one "$SRC" "$GOOD/debian.sources"
+restore_one "$SFL" "$GOOD/umbra.sources"
+restore_one "$KEY" "$GOOD/umbra-archive-keyring.gpg"
+
+report "verifying with apt-get update..."
+if apt-get update >/var/log/phoenix-apt-repair.log 2>&1; then
+    report "repair verified: apt-get update succeeded"
+    exit 0
+fi
+report "repair applied but apt-get update still fails - see /var/log/phoenix-apt-repair.log"
+exit 4

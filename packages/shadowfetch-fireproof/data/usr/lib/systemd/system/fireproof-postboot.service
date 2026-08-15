@@ -1,0 +1,17 @@
+[Unit]
+Description=Shadowfetch Fireproof first-boot-after-update check
+Documentation=https://shadowfetch.com/linux/
+# Ordered after graphical.target for the normal path; fireproof-postboot.timer
+# is the 120 s fallback for boots that never reach it. The script itself
+# waits for a real session, so an early start is harmless.
+After=graphical.target sddm.service
+ConditionPathExists=/var/lib/shadowfetch/fireproof-pending
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/fireproof-postboot
+# The script polls for up to 10 minutes before declaring a failed boot.
+TimeoutStartSec=700
+
+[Install]
+WantedBy=graphical.target

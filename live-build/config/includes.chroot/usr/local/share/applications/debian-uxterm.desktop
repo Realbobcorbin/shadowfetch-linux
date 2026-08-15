@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=UXTerm
+GenericName=Terminal emulator
+Comment=XTerm wrapper with Unicode support
+Exec=uxterm
+TryExec=uxterm
+Icon=mini.xterm_48x48
+Terminal=false
+Categories=System;TerminalEmulator;
+# Shadowfetch launcher cleanup: Konsole is the terminal.  This covers the
+# Debian-prefixed desktop-file id of the same entry.
+NoDisplay=true
+Keywords=shell;prompt;command;commandline;cmd;unicode;

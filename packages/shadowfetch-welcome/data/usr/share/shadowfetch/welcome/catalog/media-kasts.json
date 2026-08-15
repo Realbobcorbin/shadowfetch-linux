@@ -1,0 +1,14 @@
+{
+  "id": "media-kasts",
+  "name": "Kasts",
+  "kind": "apt",
+  "packages": ["kasts"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 1100000,
+  "license": "GPL-2.0+ (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "media",
+  "blurb": "Podcast player from KDE - subscriptions, downloads and playback position sync across the desktop."
+}

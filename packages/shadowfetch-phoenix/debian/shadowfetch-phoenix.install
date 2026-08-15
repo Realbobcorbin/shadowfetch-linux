@@ -1,0 +1,13 @@
+usr/libexec/phoenix-firstboot                                usr/libexec/
+usr/libexec/phoenix-restore                                  usr/libexec/
+usr/libexec/phoenix-postboot                                 usr/libexec/
+usr/libexec/phoenix-space-check                              usr/libexec/
+usr/libexec/phoenix-desktop-reset                            usr/libexec/
+usr/libexec/phoenix-recovery-report                          usr/libexec/
+usr/libexec/phoenix-overlay-banner                           usr/libexec/
+usr/lib/systemd/system/phoenix-firstboot.service             usr/lib/systemd/system/
+usr/lib/systemd/system/phoenix-postboot.service              usr/lib/systemd/system/
+etc/apt/apt.conf.d/79phoenix-space                           etc/apt/apt.conf.d/
+etc/xdg/autostart/shadowfetch-phoenix-overlay.desktop        etc/xdg/autostart/
+usr/share/polkit-1/actions/org.shadowfetch.phoenix.policy    usr/share/polkit-1/actions/
+usr/share/applications/shadowfetch-phoenix.desktop           usr/share/applications/

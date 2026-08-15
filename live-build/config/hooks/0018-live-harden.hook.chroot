@@ -1,0 +1,62 @@
+#!/bin/sh
+# 2.1.2 live-session hardening. Runs in the chroot at build time.
+#
+# Three facts that were only dangerous together:
+#   * hooks/0005-create-live-user sets PASS=shadow, documented on the download page,
+#     and grants "shadow ALL=(ALL) NOPASSWD:ALL".
+#   * ssh.service ships ENABLED, with sshd_config leaving PasswordAuthentication at
+#     its default yes and sshd_config.d/ empty.
+#   * /etc/ufw/ufw.conf ships ENABLED=no; the only enable was firstboot.sh:33, which
+#     runs after a Flatpak download -- and firstboot is now correctly skipped on live
+#     sessions, so on a live USB the firewall would never come up at all.
+#
+# Net effect before this hook: every live boot published a root-equivalent credential
+# on port 22 with no firewall. Anyone booting the USB on a cafe network was reachable.
+set -e
+
+# 1. Firewall on, at build time, with the ports our own shipped apps need.
+#    Same rules firstboot.sh applies, so installed systems are unchanged.
+#
+#    ufw's CLI applies rules by calling iptables-restore against the kernel's
+#    live netfilter tables -- and a chroot does not isolate netfilter state
+#    any more than it isolates the process table (see the sf-remove-live-user
+#    fix for issue #3). Running `ufw` bare in this chroot firewalled the BUILD
+#    HOST itself with default-deny-incoming and no SSH allow rule, cutting off
+#    remote access every time this hook ran. `unshare --net` gives the ufw
+#    calls their own throwaway network namespace to apply against, so the
+#    live-apply step can't touch the host; the resulting rule files still land
+#    on disk in the chroot's real filesystem (that part isn't namespaced),
+#    which is all the built image actually needs -- its own ufw.service
+#    re-applies those files for real on its own first boot.
+if [ -f /etc/ufw/ufw.conf ]; then
+  sed -i 's/^ENABLED=no$/ENABLED=yes/' /etc/ufw/ufw.conf
+  unshare --net -- sh -c '
+    ufw --force default deny incoming  || true
+    ufw --force default allow outgoing || true
+    ufw allow 1714:1764/udp || true   # KDE Connect
+    ufw allow 1714:1764/tcp || true
+    ufw allow 5353/udp      || true   # mDNS / Avahi
+  '
+fi
+
+# 2. No sshd on a live session. Installed systems keep it: the unit below only fires
+#    when /run/live/medium exists, which is true exactly when running from the ISO.
+cat > /etc/systemd/system/shadowfetch-live-nossh.service <<'EOF'
+[Unit]
+Description=Disable sshd on a live session (published live password)
+Documentation=https://www.shadowfetch.com/linux
+ConditionPathExists=/run/live/medium
+Before=ssh.service ssh.socket
+DefaultDependencies=no
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Stop first, then mask, so a socket-activated sshd cannot slip through between them.
+ExecStart=/bin/sh -c '/bin/systemctl stop ssh.socket ssh.service 2>/dev/null; /bin/systemctl mask ssh.service ssh.socket 2>/dev/null; exit 0'
+
+[Install]
+WantedBy=sysinit.target
+EOF
+systemctl enable shadowfetch-live-nossh.service || true

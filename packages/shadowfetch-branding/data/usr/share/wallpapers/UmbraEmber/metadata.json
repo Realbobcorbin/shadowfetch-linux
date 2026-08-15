@@ -1,0 +1,12 @@
+{
+ "KPlugin": {
+  "Id": "UmbraEmber",
+  "Name": "Umbra Ember",
+  "License": "GPL-3.0",
+  "Authors": [
+   {
+    "Name": "Shadowfetch Project"
+   }
+  ]
+ }
+}

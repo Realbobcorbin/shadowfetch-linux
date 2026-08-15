@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# Enable the two boot-time oneshots but NEVER start them from the package
+# scripts. Both are gated by their own Condition= lines and belong to boot:
+# a live-build chroot has no running systemd, and starting phoenix-firstboot
+# mid-session on an already-installed machine would create/retune the snapper
+# config under the administrator's feet instead of at the next boot.
+override_dh_installsystemd:
+	dh_installsystemd --no-start

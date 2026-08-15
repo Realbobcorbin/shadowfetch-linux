@@ -1,0 +1,43 @@
+# Shadowfetch quality-of-life toolset — added in v1.0.5
+# Small, high-value utilities. Kept lean for the 4GiB squashfs limit.
+
+# Terminal / CLI
+tmux
+ripgrep
+fd-find
+fzf
+bat
+eza
+zoxide
+ncdu
+tealdeer
+micro
+jq
+tree
+neovim
+7zip
+unzip
+zip
+
+# Desktop utilities (fill real gaps: screenshots, clipboard, snapshots, disks)
+flameshot
+copyq
+gnome-disk-utility
+
+# System maintenance / hardware
+fwupd
+smartmontools
+lm-sensors
+inxi
+powertop
+nvme-cli
+
+# --- v1.3.1 attractive additions ---
+btop
+duf
+meld
+lazygit
+keepassxc
+vorta
+czkawka-gui
+calibre

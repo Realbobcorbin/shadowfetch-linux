@@ -1,0 +1,636 @@
+#!/usr/bin/env python3
+"""shadowfetch-bundle-install - privileged catalog/bundle helper for Ignition.
+
+This is the single root-side entry point for Ignition Setup and for the
+Bundles surfaces in Welcome and Control Center.  It has exactly three verbs
+and refuses free-form arguments: catalog ids resolve only against the
+root-owned records in /usr/share/shadowfetch/welcome/catalog/.
+
+  install <catalog-id>      Two-stage install of the record's package list.
+                            polkit action: org.shadowfetch.bundle-install
+                            (auth_admin_keep - this is a system mutation).
+
+  save-choice <catalog-id>  Record an offline bundle choice so it can be
+                            offered again the moment the machine connects.
+                            polkit action: org.shadowfetch.ignition-state
+                            (allow_active=yes - writing a 200-byte choice
+                            file is not a system mutation, so the offline
+                            path never asks for a password).
+
+  mark-done                 Stamp Ignition as completed.  This is how the
+                            zero-package Core pick finishes: passwordless,
+                            zero downloads, zero prompts.
+                            polkit action: org.shadowfetch.ignition-state.
+
+The save-choice and mark-done verbs are reached through the separate
+/usr/libexec/shadowfetch-ignition-state entry point (pkexec maps one polkit
+action to one program path); that wrapper re-execs this file with
+--state-entry, which restricts the verb set.
+
+MACHINE PROTOCOL (stdout, one event per line - consumed by the Welcome UI):
+
+  SF-LOG <path>                    log file for this run
+  SF-STAGE download|commit         a stage began
+  SF-PROGRESS <stage> <pct> <msg>  progress within a stage
+  SF-LOCKWAIT <hint>               waiting for the apt/dpkg lock
+  SF-LOCKFREE                      the lock became free, continuing
+  SF-POINT <n>                     the Phoenix Point (first pre snapshot of
+                                   this transaction) protecting the install
+  SF-NOPOINT <reason>              no Phoenix Point exists for this install
+  SF-AUDIT-DIRTY                   dpkg --audit is non-empty after a failure
+  SF-CANCELLED                     the user cancelled during stage 1
+  SF-DONE                          success
+  SF-ERROR <code> <message>        failure
+
+Stage 1 (download) is apt-get -d: cancelling it or losing the network
+changes nothing on disk and partial debs resume.  Stage 2 (commit) installs
+from the local cache, ignores cancel requests, and is wrapped in automatic
+Phoenix Points by the shipped 79phoenix-space + 80snapper DPkg hooks - this
+helper creates no snapshots of its own.
+
+Exit codes: 0 ok, 2 usage, 3 bad id/record, 4 not enough disk space,
+5 download failed, 6 commit failed, 7 privilege error, 10 cancelled.
+
+Zero telemetry: the only network activity is apt talking to the mirrors
+already configured on this system, and only inside the install verb.
+"""
+
+import fcntl
+import grp
+import json
+import os
+import pwd
+import re
+import select
+import signal
+import stat
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+
+CATALOG_DIR = "/usr/share/shadowfetch/welcome/catalog"
+STATE_DIR = "/var/lib/shadowfetch"
+LOG_DIR = "/var/log/shadowfetch"
+DONE_FILE = os.path.join(STATE_DIR, "ignition-done")
+CHOICE_FILE = os.path.join(STATE_DIR, "ignition-choice.json")
+LIMITS_FILE = "/etc/security/limits.d/95-shadowfetch-audio.conf"
+
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+PKG_RE = re.compile(r"^[a-z0-9][a-z0-9+.-]+$")
+
+# Locks apt/dpkg take; we probe them politely before starting so a running
+# Discover/pkcon/terminal-apt transaction surfaces as a friendly wait
+# message instead of a hard error.
+LOCK_FILES = (
+    "/var/lib/dpkg/lock-frontend",
+    "/var/lib/dpkg/lock",
+    "/var/cache/apt/archives/lock",
+)
+
+APT_ENV = dict(
+    os.environ,
+    DEBIAN_FRONTEND="noninteractive",
+    LC_ALL="C.UTF-8",
+    PATH="/usr/sbin:/usr/bin:/sbin:/bin",
+)
+
+
+def emit(name, payload=""):
+    line = "SF-" + name + ((" " + payload) if payload else "")
+    print(line, flush=True)
+
+
+def die(exit_code, err_code, message):
+    emit("ERROR", err_code + " " + message)
+    sys.exit(exit_code)
+
+
+def usage():
+    print(__doc__, file=sys.stderr)
+    sys.exit(2)
+
+
+# ---- catalog record resolution ------------------------------------------
+
+def load_record(catalog_id):
+    """Resolve a catalog id against the root-owned catalog dir, strictly."""
+    if not ID_RE.match(catalog_id):
+        die(3, "bad-id", "catalog id contains invalid characters")
+    path = os.path.join(CATALOG_DIR, catalog_id + ".json")
+    try:
+        st = os.stat(path)
+    except OSError:
+        die(3, "no-record", "no such catalog entry: " + catalog_id)
+    # The record must be root-owned and not writable by group/other: ids
+    # resolve only against files the package manager put there.
+    if st.st_uid != 0 or (st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)):
+        die(3, "bad-record", "catalog entry is not root-owned read-only")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            rec = json.load(fh)
+    except (OSError, ValueError):
+        die(3, "bad-record", "catalog entry is not valid JSON")
+    if not isinstance(rec, dict) or rec.get("id") != catalog_id:
+        die(3, "bad-record", "catalog entry id mismatch")
+    if rec.get("kind") not in ("apt", "preset"):
+        die(3, "bad-record", "catalog entry is not an installable kind")
+    pkgs = rec.get("packages")
+    if not isinstance(pkgs, list):
+        die(3, "bad-record", "catalog entry has no package list")
+    for p in pkgs:
+        if not isinstance(p, str) or not PKG_RE.match(p):
+            die(3, "bad-record", "catalog entry names an invalid package")
+    return rec
+
+
+# ---- state files ---------------------------------------------------------
+
+def ensure_dirs():
+    for d in (STATE_DIR, LOG_DIR):
+        os.makedirs(d, mode=0o755, exist_ok=True)
+
+
+def atomic_write(path, text, mode=0o644):
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(text)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
+def verb_save_choice(catalog_id):
+    rec = load_record(catalog_id)
+    ensure_dirs()
+    choice = {
+        "id": rec["id"],
+        "name": rec.get("name") or rec["id"],
+        "chosen_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "download_bytes": rec.get("size_bytes"),
+    }
+    atomic_write(CHOICE_FILE, json.dumps(choice) + "\n")
+    emit("DONE")
+
+
+def verb_mark_done():
+    ensure_dirs()
+    atomic_write(
+        DONE_FILE,
+        "completed " + datetime.now(timezone.utc).isoformat(timespec="seconds") + "\n",
+    )
+    try:
+        os.unlink(CHOICE_FILE)
+    except OSError:
+        pass
+    emit("DONE")
+
+
+# ---- cancel handling -----------------------------------------------------
+
+def cancel_requested_nonblock():
+    """True when the UI wrote CANCEL on our stdin (no blocking)."""
+    try:
+        r, _, _ = select.select([sys.stdin.fileno()], [], [], 0)
+    except (OSError, ValueError):
+        return False
+    if not r:
+        return False
+    try:
+        data = os.read(sys.stdin.fileno(), 4096)
+    except OSError:
+        return False
+    return b"CANCEL" in data
+
+
+# ---- lock politeness -----------------------------------------------------
+
+def wait_for_locks(allow_cancel):
+    """Wait until no other package manager holds the dpkg/apt locks."""
+    waited = False
+    while True:
+        busy = False
+        for path in LOCK_FILES:
+            try:
+                fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o640)
+            except OSError:
+                continue
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                busy = True
+            finally:
+                os.close(fd)
+            if busy:
+                break
+        if not busy:
+            if waited:
+                emit("LOCKFREE")
+            return True
+        if not waited:
+            emit("LOCKWAIT", "another package manager is running")
+            waited = True
+        if allow_cancel and cancel_requested_nonblock():
+            emit("CANCELLED")
+            return False
+        time.sleep(2)
+
+
+# ---- apt with APT::Status-Fd progress ------------------------------------
+
+def parse_status_line(line, stage):
+    # dlstatus:<n>:<pct>:<message>   pmstatus:<pkg>:<pct>:<message>
+    parts = line.split(":", 3)
+    if len(parts) < 3:
+        return
+    kind = parts[0]
+    if kind not in ("dlstatus", "pmstatus"):
+        return
+    try:
+        pct = float(parts[2])
+    except ValueError:
+        return
+    msg = parts[3].strip() if len(parts) > 3 else ""
+    emit("PROGRESS", "%s %.1f %s" % (stage, pct, msg))
+
+
+def run_apt(argv, stage, log_fh, allow_cancel):
+    """Run apt-get with a status fd, streaming progress. -> (rc, cancelled)."""
+    rfd, wfd = os.pipe()
+    cmd = argv + ["-o", "APT::Status-Fd=%d" % wfd]
+    log_fh.write("+ " + " ".join(cmd) + "\n")
+    log_fh.flush()
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=log_fh,
+            stderr=log_fh,
+            pass_fds=(wfd,),
+            env=APT_ENV,
+        )
+    except OSError as exc:
+        os.close(rfd)
+        os.close(wfd)
+        log_fh.write("failed to run apt-get: %s\n" % exc)
+        return 127, False
+    os.close(wfd)
+
+    cancelled = False
+    buf = b""
+    stdin_fd = sys.stdin.fileno() if allow_cancel else None
+    try:
+        while True:
+            fds = [rfd]
+            if stdin_fd is not None:
+                fds.append(stdin_fd)
+            try:
+                ready, _, _ = select.select(fds, [], [], 0.5)
+            except (OSError, ValueError):
+                ready = []
+            if rfd in ready:
+                chunk = os.read(rfd, 4096)
+                if chunk:
+                    buf += chunk
+                    while b"\n" in buf:
+                        raw, buf = buf.split(b"\n", 1)
+                        parse_status_line(raw.decode("utf-8", "replace"), stage)
+                else:
+                    break  # writer closed: apt exited
+            if stdin_fd is not None and stdin_fd in ready:
+                try:
+                    data = os.read(stdin_fd, 4096)
+                except OSError:
+                    data = b""
+                if not data:
+                    stdin_fd = None  # UI went away; keep going safely
+                elif b"CANCEL" in data and not cancelled:
+                    cancelled = True
+                    log_fh.write("cancel requested by user\n")
+                    log_fh.flush()
+                    proc.send_signal(signal.SIGINT)
+            if proc.poll() is not None and rfd not in ready:
+                # Drain whatever the status pipe still holds, then stop.
+                os.set_blocking(rfd, False)
+                try:
+                    while True:
+                        chunk = os.read(rfd, 4096)
+                        if not chunk:
+                            break
+                        buf += chunk
+                except OSError:
+                    pass
+                for raw in buf.split(b"\n"):
+                    if raw:
+                        parse_status_line(raw.decode("utf-8", "replace"), stage)
+                break
+    finally:
+        try:
+            os.close(rfd)
+        except OSError:
+            pass
+    rc = proc.wait()
+    log_fh.write("apt-get exited %d\n" % rc)
+    log_fh.flush()
+    return rc, cancelled
+
+
+# ---- snapper / Phoenix Point discovery -----------------------------------
+
+def root_is_btrfs():
+    try:
+        with open("/proc/mounts", "r", encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) >= 3 and parts[1] == "/":
+                    return parts[2] == "btrfs"
+    except OSError:
+        pass
+    return False
+
+
+def snapper_snapshots():
+    """[(number, type), ...] for the root config, or None when unavailable."""
+    # Preferred: machine-readable CSV (snapper >= 0.9).
+    try:
+        r = subprocess.run(
+            ["snapper", "--machine-readable", "csv", "list"],
+            capture_output=True, text=True, timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    rows = []
+    if r.returncode == 0 and r.stdout.strip():
+        lines = r.stdout.strip().splitlines()
+        header = [h.strip().lower() for h in lines[0].split(",")]
+        if "number" in header and "type" in header:
+            ni, ti = header.index("number"), header.index("type")
+            for line in lines[1:]:
+                parts = line.split(",")
+                if len(parts) <= max(ni, ti):
+                    continue
+                try:
+                    rows.append((int(parts[ni]), parts[ti].strip().lower()))
+                except ValueError:
+                    continue
+            return rows
+    # Fallback: the human table. Field positions vary across versions, so
+    # scan each row for the first integer field and the first type word.
+    try:
+        r = subprocess.run(["snapper", "list"], capture_output=True,
+                           text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    for line in r.stdout.splitlines():
+        fields = [f.strip() for f in line.split("|")]
+        num = None
+        typ = None
+        for f in fields:
+            if num is None and f.isdigit():
+                num = int(f)
+            if typ is None and f.lower() in ("single", "pre", "post"):
+                typ = f.lower()
+        if num is not None and typ is not None:
+            rows.append((num, typ))
+    return rows
+
+
+def snapper_max_number():
+    rows = snapper_snapshots()
+    if rows is None:
+        return None
+    return max((n for n, _ in rows), default=0)
+
+
+def first_pre_after(baseline):
+    rows = snapper_snapshots()
+    if rows is None:
+        return None
+    candidates = [n for n, t in rows if t == "pre" and n > baseline]
+    return min(candidates) if candidates else None
+
+
+# ---- post-config steps (data-driven, known tokens only) ------------------
+
+def post_config_audio_realtime(log_fh):
+    """Pro Audio config step: realtime limits + pipewire group membership."""
+    try:
+        atomic_write(
+            LIMITS_FILE,
+            "# Installed by Shadowfetch Ignition (Pro Audio).\n"
+            "# Realtime scheduling and memory locking for PipeWire pro audio.\n"
+            "@pipewire   -   rtprio    95\n"
+            "@pipewire   -   memlock   unlimited\n",
+        )
+        log_fh.write("wrote %s\n" % LIMITS_FILE)
+    except OSError as exc:
+        log_fh.write("could not write %s: %s\n" % (LIMITS_FILE, exc))
+    uid = os.environ.get("PKEXEC_UID") or os.environ.get("SUDO_UID")
+    if not uid or not uid.isdigit():
+        log_fh.write("no invoking user known; skipping group membership\n")
+        return
+    try:
+        user = pwd.getpwuid(int(uid)).pw_name
+    except KeyError:
+        log_fh.write("uid %s has no passwd entry; skipping group\n" % uid)
+        return
+    try:
+        grp.getgrnam("pipewire")
+    except KeyError:
+        log_fh.write("no pipewire group on this system; skipping\n")
+        return
+    r = subprocess.run(["gpasswd", "-a", user, "pipewire"],
+                       capture_output=True, text=True)
+    log_fh.write("gpasswd -a %s pipewire -> %d\n" % (user, r.returncode))
+
+
+POST_CONFIG = {"audio-realtime": post_config_audio_realtime}
+
+
+# ---- the install verb ----------------------------------------------------
+
+def verb_install(catalog_id):
+    if os.geteuid() != 0:
+        die(7, "not-root",
+            "the install verb must run as root (pkexec %s install <id>)"
+            % sys.argv[0])
+    rec = load_record(catalog_id)
+    pkgs = list(rec["packages"])
+    is_ignition = catalog_id.startswith("ignition-")
+    ensure_dirs()
+
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    prefix = "ignition" if is_ignition else "catalog"
+    log_path = os.path.join(LOG_DIR, "%s-%s.log" % (prefix, ts))
+    log_fh = open(log_path, "a", encoding="utf-8")
+    os.chmod(log_path, 0o644)
+    emit("LOG", log_path)
+    log_fh.write("=== shadowfetch-bundle-install %s (%s) ===\n"
+                 % (catalog_id, ts))
+
+    if not pkgs:
+        # Core is empty by construction: nothing to download, nothing to
+        # install; completing it is a state write only.
+        log_fh.write("empty package list; completing without a transaction\n")
+        if is_ignition:
+            atomic_write(DONE_FILE, "completed " +
+                         datetime.now(timezone.utc).isoformat(timespec="seconds")
+                         + " id=" + catalog_id + "\n")
+            try:
+                os.unlink(CHOICE_FILE)
+            except OSError:
+                pass
+        emit("DONE")
+        log_fh.close()
+        return
+
+    # Full Flame pre-flight: refuse in plain words, naming the number.
+    if catalog_id == "ignition-full-flame":
+        vfs = os.statvfs("/")
+        free_gb = (vfs.f_bavail * vfs.f_frsize) / (1024 ** 3)
+        if free_gb < 5.0:
+            log_fh.write("free space %.1f GB < 5 GB; refusing\n" % free_gb)
+            log_fh.close()
+            die(4, "no-space",
+                "Full Flame needs at least 5 GB of free disk space and this "
+                "disk has %.1f GB free." % free_gb)
+
+    # Politeness: if Discover/pkcon/terminal apt holds the lock, wait.
+    if not wait_for_locks(allow_cancel=True):
+        log_fh.close()
+        sys.exit(10)
+
+    # If a previous transaction died mid-dpkg, repair before adding to it.
+    audit = subprocess.run(["dpkg", "--audit"], capture_output=True,
+                           text=True, env=APT_ENV)
+    if audit.stdout.strip():
+        log_fh.write("dpkg --audit non-empty; running apt-get -f install\n")
+        emit("STAGE", "commit")
+        emit("PROGRESS", "commit 0.0 Repairing an interrupted installation")
+        rc, _ = run_apt(["apt-get", "-y", "-f", "install"], "commit",
+                        log_fh, allow_cancel=False)
+        if rc != 0:
+            log_fh.close()
+            die(6, "repair-failed",
+                "could not repair the previous interrupted installation; "
+                "see the log")
+
+    # STAGE 1 - download only. Cancel or network loss changes nothing on
+    # disk, and partially downloaded debs resume next time.
+    emit("STAGE", "download")
+    rc, cancelled = run_apt(
+        ["apt-get", "-y", "-d", "-o", "DPkg::Lock::Timeout=120", "install"]
+        + pkgs,
+        "download", log_fh, allow_cancel=True)
+    if cancelled:
+        emit("CANCELLED")
+        log_fh.close()
+        sys.exit(10)
+    if rc != 0:
+        log_fh.close()
+        die(5, "download-failed",
+            "the download did not complete - nothing was changed on disk, "
+            "and it will resume where it stopped")
+
+    # Baseline for Phoenix Point discovery. The 79phoenix-space and
+    # 80snapper DPkg hooks wrap the commit in pre/post snapshots on their
+    # own; the first pre snapshot after this baseline is THE Point for the
+    # whole transaction.
+    baseline = snapper_max_number() if root_is_btrfs() else None
+
+    # STAGE 2 - install from the local cache. No cancel: interrupting dpkg
+    # is the one thing that can genuinely hurt, so this stage is
+    # "finishing - safe to leave running".
+    emit("STAGE", "commit")
+    rc, _ = run_apt(
+        ["apt-get", "-y", "-o", "DPkg::Lock::Timeout=120", "install"] + pkgs,
+        "commit", log_fh, allow_cancel=False)
+
+    point = first_pre_after(baseline) if baseline is not None else None
+    if point is not None:
+        emit("POINT", str(point))
+    elif not root_is_btrfs():
+        emit("NOPOINT", "not-btrfs")
+    else:
+        emit("NOPOINT", "no-snapshot")
+
+    if rc != 0:
+        audit = subprocess.run(["dpkg", "--audit"], capture_output=True,
+                               text=True, env=APT_ENV)
+        log_fh.write("dpkg --audit after failure:\n" + audit.stdout + "\n")
+        if audit.stdout.strip():
+            emit("AUDIT-DIRTY")
+        log_fh.close()
+        die(6, "commit-failed", "the installation did not complete")
+
+    # Post-config steps are data-driven but id-locked: only tokens this
+    # helper knows are ever executed.
+    for token in rec.get("post_config") or []:
+        fn = POST_CONFIG.get(token)
+        if fn is not None:
+            fn(log_fh)
+        else:
+            log_fh.write("unknown post_config token ignored: %r\n" % token)
+
+    if is_ignition:
+        atomic_write(DONE_FILE, "completed " +
+                     datetime.now(timezone.utc).isoformat(timespec="seconds")
+                     + " id=" + catalog_id + "\n")
+        try:
+            os.unlink(CHOICE_FILE)
+        except OSError:
+            pass
+
+    log_fh.write("success\n")
+    log_fh.close()
+    emit("DONE")
+
+
+# ---- entry ---------------------------------------------------------------
+
+def main():
+    args = sys.argv[1:]
+    state_only = False
+    if args and args[0] == "--state-entry":
+        # Reached through /usr/libexec/shadowfetch-ignition-state, whose
+        # polkit action is passwordless for active local users; that entry
+        # point may only write the two tiny state files, never install.
+        state_only = True
+        args = args[1:]
+    if not args:
+        usage()
+    verb, rest = args[0], args[1:]
+
+    if verb == "install":
+        if state_only:
+            die(7, "verb-not-allowed",
+                "install is not available through the state entry point")
+        if len(rest) != 1:
+            usage()
+        verb_install(rest[0])
+    elif verb == "save-choice":
+        if len(rest) != 1:
+            usage()
+        if os.geteuid() != 0:
+            die(7, "not-root",
+                "run via pkexec /usr/libexec/shadowfetch-ignition-state "
+                "save-choice <id>")
+        verb_save_choice(rest[0])
+    elif verb == "mark-done":
+        if rest:
+            usage()
+        if os.geteuid() != 0:
+            die(7, "not-root",
+                "run via pkexec /usr/libexec/shadowfetch-ignition-state "
+                "mark-done")
+        verb_mark_done()
+    else:
+        usage()
+
+
+if __name__ == "__main__":
+    main()

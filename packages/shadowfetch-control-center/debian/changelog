@@ -1,0 +1,68 @@
+shadowfetch-control-center (2.1.4-1) umbra; urgency=high
+
+  * Rename the Agents surface to Local AI and make Buzz shared compute,
+    private workspaces and exposure checks the primary actions.
+  * Add a dedicated Local AI launcher that opens the correct Control Center
+    section directly.
+  * Show Buzz's loopback model inventory through Firewatch without polling a
+    second runtime or displaying stale telemetry.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sat, 08 Aug 2026 11:32:00 -0400
+
+shadowfetch-control-center (2.1.3-1) unstable; urgency=high
+
+  * Version bump to match the 2.1.3 release. No functional changes in this
+    package. 2.1.3 is a security/stability release fixing a critical Calamares
+    installer bug (sf-remove-live-user, see shadowfetch-branding 2.1.3-1) and a
+    first-boot-on-live-session bug (see shadowfetch-defaults 2.1.3-1).
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sun, 02 Aug 2026 10:22:06 -0400
+shadowfetch-control-center (2.1.2-1) unstable; urgency=medium
+
+  * New package: the Control Center becomes its own deb and grows the
+    "Fire Edition" shell. Takes over /usr/bin/shadowfetch-control from
+    shadowfetch-defaults (Replaces:); the six 2.1.1 action cards all
+    survive inside their new sections, so nothing users could reach
+    before is gone.
+  * Six fixed sidebar sections: Ignite, Watch, Recover, Agents, Drivers,
+    and "Software & Updates" (subtitle "Updates & bundles") - named so the
+    release's headline safety feature is never hidden behind a word that
+    means "app store".
+  * Deep links: --page section[:tab][:point=N], with single-instance
+    routing over the session bus (com.shadowfetch.ControlCenter). A second
+    launch fronts the existing window instead of opening another, so every
+    entry point - Welcome, the Firewatch empty state, the Phoenix overlay
+    banner, Fireproof notifications - lands in one window.
+  * Ignite: the Ember switch with the safety promise on the card BEFORE
+    the flip ("Always returns to Balanced automatically - safe to try"),
+    the three-state flame driven by Firewatch's flame level, a readout
+    strip bound to Firewatch (emberd has no sampler), a duration picker
+    that goes through the shadowfetch-ember pkexec helper, and the
+    two-card app-profile row (Gaming with live GameMode status, Local AI
+    with the hardware verdict). Profiles are presets of Ember - the row
+    header says exactly that.
+  * Watch: sensor tiles that say "sensor not available" instead of
+    guessing, the heat map with humanized names and icons resolved by the
+    daemon (the UI never sees a cgroup path), PSS labelled where shown,
+    the "resource heat, not temperature" note, and a Models tab whose
+    empty state deep-links the Welcome AI catalog. When firewatchd is down
+    the page says so and shows no stale numbers.
+  * Recover: Phoenix Points listed via snapperd's D-Bus, restore through
+    pkexec phoenix-restore (works from inside a "Last Known Good Flame"
+    overlay session, with the Point preselected), the 1:1
+    DISABLE_APT_SNAPSHOT toggle, the honest ext4 banner, and the repair
+    toolkit (sources repair, driver reinstall, desktop reset with a
+    timestamped backup, recovery report, text-mode recovery menu).
+  * Agents, Drivers, Software & Updates: hardware verdicts from the local
+    fact file with their scan timestamp, VRAM always labelled with its
+    source, "may need firmware" wording for Wi-Fi (never "broken"),
+    bundles rendered from the same catalog records Welcome uses and
+    installed through the same id-locked pkexec helper, and the only
+    permitted sidebar badge (pending updates from fireproofd).
+  * Session-side Ember helper: suspends Baloo indexing at login when
+    Ember is already active, covering re-login during an Ember run.
+  * No telemetry, no network connections: every number on screen comes
+    from a local bus, a local file, or a local command, and the page says
+    so in plain words when a source cannot answer.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 30 Jul 2026 12:00:00 -0400

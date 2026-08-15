@@ -1,0 +1,23 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|purge)
+        # Undo the postinst backstop: with Fireproof gone, PackageKit's
+        # offline updates are the distro default again.
+        deb-systemd-helper unmask packagekit-offline-update.service >/dev/null 2>&1 || true
+        ;;
+esac
+
+if [ "$1" = "purge" ]; then
+    rm -f /var/lib/shadowfetch/fireproof-state.json \
+          /var/lib/shadowfetch/fireproof-pending \
+          /etc/issue.d/50-shadowfetch-fireproof.issue
+    # /var/lib/shadowfetch itself is deliberately NOT removed here:
+    # it is shared with shadowfetch-phoenix and declared in .dirs, so
+    # dpkg's directory refcounting owns its lifetime.
+fi
+
+#DEBHELPER#
+
+exit 0

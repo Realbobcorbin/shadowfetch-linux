@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# fireproofd is D-Bus activated (Type=dbus, no [Install] section) and the
+# postboot service/timer only matter on the boot after an update: none of
+# them should be force-started at package install time. --no-start keeps
+# dh_installsystemd's enable + stop-on-remove handling without the start.
+override_dh_installsystemd:
+	dh_installsystemd --no-start
+
+# Offline unit tests: analyzer diff logic, epoch-encoded cache filename
+# derivation, postboot pre_point parsing. Plain unittest, no network,
+# no apt/dbus needed (the daemon is loaded against stub modules).
+override_dh_auto_test:
+	python3 -m unittest discover -s tests -v

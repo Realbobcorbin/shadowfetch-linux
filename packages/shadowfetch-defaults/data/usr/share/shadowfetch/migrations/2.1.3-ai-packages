@@ -1,0 +1,9 @@
+shadowfetch-ai-workspace
+llama.cpp
+llama.cpp-services
+llama.cpp-tools
+llama.cpp-tools-extra
+libllama0
+whisper.cpp
+libwhisper1
+whisper.cpp-tools

@@ -1,0 +1,96 @@
+#!/bin/bash
+# Retire the 2.1.3 distro-managed AI packages without deleting model data.
+set -euo pipefail
+
+MANIFEST="/usr/share/shadowfetch/migrations/2.1.3-ai-packages"
+MANIFEST_SHA256="6eeddfe229f65e64288c34b88e23ad19a859de31688d73d29817244f064d6dd5"
+MARKER="/var/lib/shadowfetch/migrations/2.1.3-ai.pending"
+
+defer() {
+    printf 'shadowfetch migration deferred: %s\n' "$*" >&2
+    exit 75
+}
+
+package_lock_busy() {
+    local lock
+    for lock in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock; do
+        fuser "$lock" >/dev/null 2>&1 && return 0
+    done
+    return 1
+}
+
+validate_manifest() {
+    [[ -f "$MANIFEST" ]] || defer "package manifest is missing"
+    printf '%s  %s\n' "$MANIFEST_SHA256" "$MANIFEST" \
+        | sha256sum --check --status - \
+        || defer "package manifest failed verification"
+}
+
+installed_packages() {
+    local package status
+    while IFS= read -r package; do
+        status=$(dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null || true)
+        [[ "$status" == ii* ]] && printf '%s\n' "$package"
+    done < "$MANIFEST"
+}
+
+finalize() {
+    validate_manifest
+    if [[ -n "$(installed_packages)" ]]; then
+        defer "one or more retired packages are still installed"
+    fi
+    rm -f -- "$MARKER"
+    printf 'Shadowfetch 2.1.3 package retirement is complete; personal data was preserved.\n'
+}
+
+if [[ "${1:-}" == "--ready" ]]; then
+    [[ -f "$MARKER" ]] || exit 1
+    package_lock_busy && exit 1
+    exit 0
+fi
+
+if [[ "${1:-}" == "--finalize" ]]; then
+    finalize
+    exit 0
+fi
+
+[[ $# -eq 0 ]] || { printf 'usage: %s [--ready|--finalize]\n' "$0" >&2; exit 2; }
+[[ ${EUID:-$(id -u)} -eq 0 ]] || defer "root privileges are required"
+[[ -f "$MARKER" ]] || exit 0
+validate_manifest
+package_lock_busy && defer "another package operation is active"
+
+mapfile -t installed < <(installed_packages)
+if (( ${#installed[@]} == 0 )); then
+    finalize
+    exit 0
+fi
+
+temporary=$(mktemp -d /var/tmp/shadowfetch-migrate-2.1.3-ai.XXXXXX)
+cleanup() {
+    local status=$?
+    trap - EXIT
+    rm -rf -- "$temporary"
+    exit "$status"
+}
+trap cleanup EXIT
+
+printf '%s\n' "${installed[@]}" | sort -u > "$temporary/expected"
+if ! apt-get -s -o Debug::NoLocking=1 remove "${installed[@]}" \
+    > "$temporary/simulation"; then
+    defer "APT could not produce the retirement plan"
+fi
+awk '/^Remv / {print $2}' "$temporary/simulation" | sort -u > "$temporary/planned"
+cmp -s "$temporary/expected" "$temporary/planned" \
+    || defer "APT proposed a removal outside the verified migration manifest"
+
+package_lock_busy && defer "another package operation started after simulation"
+if ! DEBIAN_FRONTEND=noninteractive apt-get \
+    -o DPkg::Lock::Timeout=120 \
+    -o Dpkg::Options::="--force-confold" \
+    -o APT::Get::Assume-Yes=true \
+    remove "${installed[@]}"; then
+    defer "the package retirement transaction failed"
+fi
+
+finalize

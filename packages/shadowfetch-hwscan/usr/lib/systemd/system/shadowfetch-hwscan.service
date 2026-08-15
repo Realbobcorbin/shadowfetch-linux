@@ -1,0 +1,32 @@
+[Unit]
+Description=Shadowfetch hardware and AI capability scan
+Documentation=https://shadowfetch.com/linux/
+# One scan per boot, written to /var/lib/shadowfetch/hwscan.json
+# (world-readable). UI surfaces (Ignition, Welcome, Control Center
+# Agents/Drivers) read the file when it is from the current boot and
+# exec /usr/libexec/shadowfetch-hwscan themselves otherwise, so this
+# unit never blocks login. The firstboot GPU flow restarts it after a
+# driver install so vram_source flips estimated/unknown -> measured.
+After=local-fs.target
+Before=graphical.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/shadowfetch-hwscan --write-state
+TimeoutStartSec=30
+# Read-only scan; the only write is the fact file under StateDirectory.
+StateDirectory=shadowfetch
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+# Zero network by design: both probes (vulkaninfo, nvidia-smi) are local.
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

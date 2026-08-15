@@ -1,0 +1,149 @@
+#!/bin/sh
+# ember-restore - idempotently undo every Ember Mode mutation.
+#
+# Reads /run/shadowfetch/ember.state, one line per mutation, exactly as
+# emberd wrote it (record-then-act, so a crash mid-arm still restores):
+#
+#     governor cpu0 schedutil        restore that cpu's prior governor
+#     stopped fwupd.service          start the unit again (no-block)
+#     dropin system.slice cpuweight  put system.slice CPUWeight back to 100
+#
+# Runs as ExecStartPre AND ExecStopPost of shadowfetch-ember.service, and
+# survives being run twice, run with no state file, or run after a power
+# cut (in which case /run is empty and everything already reverted --
+# that is auto-return layer (d)).
+#
+# Crash-safety of this tool itself: the state file is first renamed to
+# ember.state.restoring, then processed, then removed.  If we die halfway
+# through, the next run finds the .restoring file and finishes the job.
+# Every undo action is individually idempotent, so replaying lines that
+# were already undone is harmless.
+#
+# Also cleared here (IA judge fold): /run/shadowfetch/ember-profile, the
+# app-profile marker written by the pkexec ember-duration helper -- it is
+# cleared in the same pass that undoes ember.state, so session QML never
+# has to touch a root path.  The RuntimeMaxSec duration drop-in is only
+# removed on the STOP path ($SERVICE_RESULT is set by systemd for
+# ExecStopPost): removing it during ExecStartPre would throw away a time
+# limit the user just picked for the arm that is starting right now.
+set -u
+
+# ---- --help / --version, BEFORE any side effect -----------------------------
+case "${1:-}" in
+  -h|--help)
+    cat <<'SFHELP'
+ember-restore - undo every Ember Mode mutation recorded in /run/shadowfetch/ember.state.
+
+USAGE
+  ember-restore     restore governors, restart paused services, reset the
+                    system.slice CPU weight, clear the app-profile marker
+
+Idempotent by design: safe to run twice, safe to run with nothing to do.
+Runs automatically as ExecStartPre and ExecStopPost of
+shadowfetch-ember.service.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+    exit 0 ;;
+  --version)
+    echo "ember-restore (Shadowfetch Linux) $(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"
+    exit 0 ;;
+  "") ;;
+  *)
+    echo "ember-restore: unrecognised argument: $1 (see --help)" >&2
+    exit 2 ;;
+esac
+
+if [ "$(id -u)" != "0" ]; then
+    echo "ember-restore: must run as root" >&2
+    exit 1
+fi
+
+STATE=/run/shadowfetch/ember.state
+WORK=$STATE.restoring
+
+mkdir -p /run/shadowfetch
+
+undo_line() {
+    # $1 = kind, $2/$3 = arguments.  Arguments are validated even though
+    # the state file is root-owned tmpfs: this tool must never be a way
+    # to write outside its three known mutation types.
+    kind=$1; a=${2:-}; b=${3:-}
+    case "$kind" in
+        governor)
+            case "$a" in
+                cpu[0-9]|cpu[0-9][0-9]|cpu[0-9][0-9][0-9]) ;;
+                *) return 0 ;;
+            esac
+            case "$b" in
+                ""|*[!a-z0-9_-]*) return 0 ;;
+            esac
+            gpath=/sys/devices/system/cpu/$a/cpufreq/scaling_governor
+            if [ -w "$gpath" ]; then
+                printf '%s\n' "$b" > "$gpath" 2>/dev/null || true
+            fi
+            ;;
+        stopped)
+            # Only plain service names; never paths.  packagekit and
+            # fwupd would come back via D-Bus activation anyway, but the
+            # promise is "undoes service stops", so start them
+            # explicitly.  --no-block: restore must never hang a unit
+            # transition on a slow daemon startup.
+            case "$a" in
+                ""|*/*|*..*) return 0 ;;
+                *.service) ;;
+                *) return 0 ;;
+            esac
+            systemctl start --no-block -- "$a" >/dev/null 2>&1 || true
+            ;;
+        dropin)
+            if [ "$a" = "system.slice" ] && [ "$b" = "cpuweight" ]; then
+                # 100 is the systemd default; the runtime setting itself
+                # evaporates on reboot regardless.
+                systemctl set-property --runtime system.slice CPUWeight=100 \
+                    >/dev/null 2>&1 || true
+            fi
+            ;;
+        *)
+            # Unknown mutation kinds from a future emberd: ignore rather
+            # than fail the whole restore.
+            ;;
+    esac
+    return 0
+}
+
+process_file() {
+    f=$1
+    [ -f "$f" ] || return 0
+    while IFS=' ' read -r kind a b rest || [ -n "${kind:-}" ]; do
+        [ -n "${kind:-}" ] || continue
+        case "$kind" in \#*) continue ;; esac
+        undo_line "$kind" "${a:-}" "${b:-}"
+    done < "$f"
+    rm -f "$f"
+}
+
+# 1. Finish any restore a previous run started but did not complete.
+process_file "$WORK"
+
+# 2. Claim the current state file atomically, then process it.
+if [ -f "$STATE" ]; then
+    mv -f "$STATE" "$WORK" 2>/dev/null || true
+    process_file "$WORK"
+fi
+
+# 3. Clear the app-profile marker in the same pass (IA judge fold).
+rm -f /run/shadowfetch/ember-profile
+
+# 4. On the stop path only, drop the RuntimeMaxSec duration drop-in so
+#    "for N hours" never leaks into the next arm.  systemd sets
+#    $SERVICE_RESULT for ExecStopPost and never for ExecStartPre.
+if [ -n "${SERVICE_RESULT:-}" ]; then
+    if [ -e /run/systemd/system/shadowfetch-ember.service.d/50-ember-duration.conf ]; then
+        rm -f /run/systemd/system/shadowfetch-ember.service.d/50-ember-duration.conf
+        rmdir /run/systemd/system/shadowfetch-ember.service.d 2>/dev/null || true
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

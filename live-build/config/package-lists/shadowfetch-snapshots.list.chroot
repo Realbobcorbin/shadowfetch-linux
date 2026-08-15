@@ -1,0 +1,5 @@
+# Shadowfetch 1.2.9 "Snapshots & Rollback" stack
+snapper
+btrfs-assistant
+grub-btrfs
+inotify-tools

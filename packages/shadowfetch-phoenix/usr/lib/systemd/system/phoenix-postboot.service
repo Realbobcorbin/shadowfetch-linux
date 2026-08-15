@@ -1,0 +1,21 @@
+[Unit]
+Description=Phoenix Recovery post-restore pass (update-grub flag, @_prev/@new garbage collection)
+Documentation=https://shadowfetch.com/linux/
+# Runs every normal boot; the script quick-exits when there is nothing to do.
+# Never inside an overlay session (do not GC the real volume while the user
+# rides a Point) and never on live media.
+ConditionPathExists=!/run/phoenix-overlay
+ConditionPathExists=!/run/live/medium
+ConditionPathExists=!/run/live/rootfs
+After=local-fs.target
+# Ordered after phoenix-firstboot so a first boot that both arms snapper and
+# carries a restore flag (factory-preloaded image) behaves deterministically.
+After=phoenix-firstboot.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/phoenix-postboot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

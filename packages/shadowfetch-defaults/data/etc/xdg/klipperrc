@@ -1,0 +1,4 @@
+[General]
+KeepClipboardContents=true
+MaxClipItems=50
+PreventEmptyClipboard=true

@@ -1,0 +1,14 @@
+{
+  "id": "media-haruna",
+  "name": "Haruna",
+  "kind": "apt",
+  "packages": ["haruna"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 1000000,
+  "license": "GPL-3.0+ (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "media",
+  "blurb": "Video player built on mpv with a friendly interface, playlists and hardware decoding."
+}

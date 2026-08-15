@@ -1,0 +1,141 @@
+# Shadowfetch Linux Plymouth boot splash (Umbra v2).
+# Graphite ink background, centered emblem, warm gold scanner dots.
+
+Window.SetBackgroundTopColor(0.039, 0.051, 0.067);     # #0a0d11 ink
+Window.SetBackgroundBottomColor(0.055, 0.071, 0.094);  # #0e1218 slight gradient
+
+# --- Emblem ---
+logo.image = Image("logo.png");
+logo_max = 320;
+if (logo.image.GetWidth() > logo_max) {
+    scale = logo_max / logo.image.GetWidth();
+    logo.image = logo.image.Scale(logo_max, logo.image.GetHeight() * scale);
+}
+logo.sprite = Sprite(logo.image);
+logo.x = Window.GetX() + Window.GetWidth()  / 2 - logo.image.GetWidth()  / 2;
+logo.y = Window.GetY() + Window.GetHeight() / 2 - logo.image.GetHeight() / 2 - 40;
+logo.sprite.SetPosition(logo.x, logo.y, 0);
+
+# --- Wordmark (warm off-white) ---
+brand.image = Image.Text("SHADOWFETCH  LINUX", 0.90, 0.86, 0.74, 1, "Sans Bold 14");
+brand.sprite = Sprite(brand.image);
+brand.x = Window.GetWidth() / 2 - brand.image.GetWidth() / 2;
+brand.y = logo.y + logo.image.GetHeight() + 24;
+brand.sprite.SetPosition(brand.x, brand.y, 0);
+
+# --- Gold scanner dots ---
+dot_count = 7;
+dot_size  = 14;
+dot_gap   = 10;
+dot_image = Image("dot-gold.png").Scale(dot_size, dot_size);
+dots_width = dot_count * dot_size + (dot_count - 1) * dot_gap;
+dots_x0 = Window.GetWidth() / 2 - dots_width / 2;
+dots_y  = brand.y + brand.image.GetHeight() + 30;
+
+spinner.tick = 0;
+spinner.active = 1;
+for (i = 0; i < dot_count; i++) {
+    dots[i].sprite = Sprite(dot_image);
+    dots[i].sprite.SetPosition(dots_x0 + i * (dot_size + dot_gap), dots_y, 10);
+    dots[i].sprite.SetOpacity(0.28);
+}
+dots[0].sprite.SetOpacity(1.0);
+
+fun set_spinner_opacity(opacity) {
+    for (i = 0; i < dot_count; i++) {
+        dots[i].sprite.SetOpacity(opacity);
+    }
+}
+
+fun refresh_callback() {
+    if (spinner.active) {
+        spinner.tick++;
+        pos = Math.Int(spinner.tick / 4) % dot_count;
+        previous = (pos + dot_count - 1) % dot_count;
+        for (i = 0; i < dot_count; i++) {
+            opacity = 0.28;
+            if (i == previous) opacity = 0.58;
+            if (i == pos) opacity = 1.0;
+            dots[i].sprite.SetOpacity(opacity);
+        }
+    }
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# --- Encrypted-drive unlock dialogue ---
+password.title.image = Image.Text(
+    "UNLOCK ENCRYPTED DRIVE", 0.90, 0.69, 0.30, 1, "Sans Bold 13"
+);
+password.title.sprite = Sprite(password.title.image);
+password.title.x = Window.GetWidth() / 2 - password.title.image.GetWidth() / 2;
+password.title.y = dots_y - 2;
+password.title.sprite.SetPosition(password.title.x, password.title.y, 20);
+password.title.sprite.SetOpacity(0);
+
+password.hint.image = Image.Text(
+    "Enter your disk passphrase, then press Enter",
+    0.86, 0.84, 0.79, 1, "Sans 11"
+);
+password.hint.sprite = Sprite(password.hint.image);
+password.hint.x = Window.GetWidth() / 2 - password.hint.image.GetWidth() / 2;
+password.hint.y = password.title.y + password.title.image.GetHeight() + 12;
+password.hint.sprite.SetPosition(password.hint.x, password.hint.y, 20);
+password.hint.sprite.SetOpacity(0);
+
+password.dot_size = 10;
+password.dot_gap = 8;
+password.max_bullets = 24;
+password.dot_image = Image("dot-gold.png").Scale(
+    password.dot_size, password.dot_size
+);
+password.bullets_y = password.hint.y + password.hint.image.GetHeight() + 18;
+password.active = 0;
+
+fun hide_password_dialogue() {
+    password.title.sprite.SetOpacity(0);
+    password.hint.sprite.SetOpacity(0);
+    for (index = 0; password.bullets[index]; index++) {
+        password.bullets[index].sprite.SetOpacity(0);
+    }
+}
+
+fun display_password_callback(prompt, bullets) {
+    password.active = 1;
+    spinner.active = 0;
+    set_spinner_opacity(0);
+    password.title.sprite.SetOpacity(1);
+    password.hint.sprite.SetOpacity(1);
+
+    if (bullets > password.max_bullets) bullets = password.max_bullets;
+    bullets_width = bullets * password.dot_size;
+    if (bullets > 1) {
+        bullets_width = bullets_width + (bullets - 1) * password.dot_gap;
+    }
+    bullets_x0 = Window.GetWidth() / 2 - bullets_width / 2;
+
+    for (index = 0; password.bullets[index] || index < bullets; index++) {
+        if (!password.bullets[index]) {
+            password.bullets[index].sprite = Sprite(password.dot_image);
+        }
+        password.bullets[index].sprite.SetPosition(
+            bullets_x0 + index * (password.dot_size + password.dot_gap),
+            password.bullets_y,
+            20
+        );
+        password.bullets[index].sprite.SetOpacity(0);
+        if (index < bullets) password.bullets[index].sprite.SetOpacity(1);
+    }
+}
+
+fun display_normal_callback() {
+    password.active = 0;
+    hide_password_dialogue();
+    spinner.active = 1;
+    set_spinner_opacity(0.28);
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+# Routine status payloads are intentionally not rendered on the branded splash.
+# Pressing Esc still exposes Plymouth's detailed text console for diagnostics.

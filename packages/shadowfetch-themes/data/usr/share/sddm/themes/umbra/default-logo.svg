@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1481 300" width="1481" height="300"><polygon points="150.00,57.23 230.34,103.61 230.34,196.39 150.00,242.77 69.66,196.39 69.66,103.61" fill="none" stroke="#D8A24A" stroke-width="16.60" stroke-linejoin="round"/>
+<circle cx="150.00" cy="98.24" r="12.70" fill="#E8B65E"/>
+<polyline points="98.24,138.28 150.00,166.60 201.76,138.28" fill="none" stroke="#E8B65E" stroke-width="16.60" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="98.24,174.41 150.00,202.73 201.76,174.41" fill="none" stroke="#E8B65E" stroke-width="16.60" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="320" y="150" dominant-baseline="central" font-family="DejaVu Sans" font-weight="bold" font-size="120" letter-spacing="7.199999999999999" fill="#D8A24A">SHADOWFETCH</text></svg>

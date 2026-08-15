@@ -1,0 +1,57 @@
+#!/bin/bash
+# Shadowfetch hook: 0005-create-live-user
+# live-config-systemd on lb 3.0~a57 does not reliably create the live user from
+# the --bootappend-live username= flag, so we do it ourselves at chroot-build time.
+# Result: every live session boots with a real 'shadow' account that SDDM can
+# autologin to (see 0015-sddm-autologin.hook.chroot).
+
+set -e
+
+echo "[shadowfetch] Creating live user 'shadow'..."
+
+USER=shadow
+PASS=shadow   # documented on download page; users should change after install
+
+# Debian already has a system 'shadow' group (owns /etc/shadow), so
+# useradd's default user-group creation collides. Use the existing
+# 'users' group as primary, then add to whichever supplementary groups
+# actually exist in this chroot.
+PRIMARY_GROUP=users
+CANDIDATE_GROUPS="sudo audio video render plugdev netdev bluetooth lpadmin scanner dialout cdrom"
+
+AVAILABLE_GROUPS=""
+for g in $CANDIDATE_GROUPS; do
+    if getent group "$g" >/dev/null 2>&1; then
+        AVAILABLE_GROUPS="$AVAILABLE_GROUPS${AVAILABLE_GROUPS:+,}$g"
+    fi
+done
+
+if ! id "$USER" >/dev/null 2>&1; then
+    useradd \
+        --create-home \
+        --shell /bin/bash \
+        --no-user-group \
+        --gid "$PRIMARY_GROUP" \
+        ${AVAILABLE_GROUPS:+--groups "$AVAILABLE_GROUPS"} \
+        "$USER"
+    echo "${USER}:${PASS}" | chpasswd
+    echo "[shadowfetch]   created $USER (primary group: $PRIMARY_GROUP, supplementary: ${AVAILABLE_GROUPS:-none})"
+else
+    echo "[shadowfetch]   $USER already exists, skipping useradd"
+fi
+
+# Sudoers: passwordless sudo for the live user (live convention)
+mkdir -p /etc/sudoers.d
+cat > /etc/sudoers.d/shadowfetch-live-shadow <<'EOF'
+shadow ALL=(ALL) NOPASSWD:ALL
+EOF
+chmod 0440 /etc/sudoers.d/shadowfetch-live-shadow
+
+# Make sure shadow owns its home and the /etc/skel templates are applied.
+# (live-config normally does this via cp -a; we do it explicitly.)
+if [ -d /etc/skel ]; then
+    cp -a /etc/skel/. /home/$USER/ 2>/dev/null || true
+    chown -R $USER:$USER /home/$USER
+fi
+
+echo "[shadowfetch] Live user 'shadow' created."

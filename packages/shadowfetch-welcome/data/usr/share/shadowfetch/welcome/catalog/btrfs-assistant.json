@@ -1,0 +1,13 @@
+{
+  "id": "btrfs-assistant",
+  "name": "Btrfs Assistant",
+  "kind": "apt",
+  "packages": ["btrfs-assistant"],
+  "url": "",
+  "sha256": "",
+  "size_bytes": 1200000,
+  "license": "GPL-3.0-or-later",
+  "min_ram_gb": 0,
+  "requires": ["btrfs"],
+  "blurb": "A power-user GUI for Btrfs snapshots and subvolumes, for people who want to see behind Phoenix Recovery. Phoenix handles restore points automatically; this tool is for hands-on snapshot management, browsing, and diffing. Only offered on Btrfs installs."
+}

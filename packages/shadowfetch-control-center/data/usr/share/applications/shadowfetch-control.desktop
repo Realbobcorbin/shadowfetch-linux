@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Shadowfetch Control Center
+Comment=Ignite, Watch, Recover, Local AI, Drivers and Software & Updates
+Exec=shadowfetch-control
+Icon=shadowfetch
+Terminal=false
+Categories=System;
+Keywords=ember;firewatch;phoenix;update;health;recovery;AI;Buzz;system;
+StartupNotify=true
+X-DBUS-ServiceName=com.shadowfetch.ControlCenter

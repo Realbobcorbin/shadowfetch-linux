@@ -1,0 +1,14 @@
+{
+  "id": "ignition-core",
+  "name": "Core",
+  "kind": "preset",
+  "packages": [],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 0,
+  "license": "Free software (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "ignition",
+  "blurb": "Boots ready with zero downloads. Firefox ESR, KeePassXC, Kleopatra, Tor and OnionShare are already on your system - picking Core installs nothing and finishes even offline, with no password prompt."
+}

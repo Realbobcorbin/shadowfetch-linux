@@ -1,0 +1,12 @@
+#!/bin/sh
+# shadowfetch-ignition-state - passwordless state entry point for Ignition.
+#
+# pkexec maps exactly one polkit action to one program path, so the two
+# tiny state verbs (save-choice, mark-done) get their own path here with
+# the allow_active=yes action org.shadowfetch.ignition-state, while the
+# real installer verb stays behind org.shadowfetch.bundle-install
+# (auth_admin_keep) on /usr/libexec/shadowfetch-bundle-install.
+#
+# The --state-entry flag makes the shared implementation refuse the
+# install verb through this path, whatever the caller asks for.
+exec /usr/libexec/shadowfetch-bundle-install --state-entry "$@"

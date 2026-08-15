@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Shadowfetch Welcome
+Comment=First-boot setup
+Exec=shadowfetch-welcome
+Icon=shadowfetch
+Terminal=false
+Categories=Utility;X-Shadowfetch-AI;
+Keywords=setup;welcome;desktop;apps;Buzz;local AI;
+X-KDE-autostart-phase=2
+OnlyShowIn=KDE;

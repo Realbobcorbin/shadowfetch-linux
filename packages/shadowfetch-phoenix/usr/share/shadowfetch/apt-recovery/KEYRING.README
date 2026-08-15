@@ -1,0 +1,7 @@
+umbra-archive-keyring.gpg is a BINARY artifact installed at package build time on the
+box: copy the current public key from the distro tree
+(~/projects/shadowfetch/live-build/config/archives/shadowfetch.key.binary, itself
+dearmored fresh each build from repo/shadowfetch.gpg.asc) into this directory as
+umbra-archive-keyring.gpg before building shadowfetch-phoenix. It must be byte-identical
+to what the image ships in /etc/apt/trusted.gpg.d/shadowfetch.gpg, or --check will
+report permanent drift. The debian/install list already carries it.

@@ -1,0 +1,113 @@
+#!/bin/bash
+# Shadowfetch live-build hook: 0010-system-defaults
+# Runs in the chroot during ISO build to set system-level defaults.
+
+set -e
+
+echo "[shadowfetch] Configuring system defaults..."
+
+# Enable services
+systemctl enable NetworkManager
+systemctl enable sddm
+systemctl enable bluetooth
+systemctl enable earlyoom
+systemctl enable zramswap
+# tuned removed: KDE Plasma integrates with power-profiles-daemon; running both conflicts.
+systemctl mask tuned 2>/dev/null || true
+
+# Disable services we don't want by default
+systemctl disable apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+systemctl disable NetworkManager-wait-online.service 2>/dev/null || true  # faster boot
+# Early-boot Wi-Fi units must be active from the FIRST boot, not just after firstboot.sh.
+systemctl enable rfkill-unblock.service shadowfetch-regdomain.service 2>/dev/null || true
+# snapper-cleanup.timer is enabled by firstboot.sh ONLY when a btrfs root
+# snapper config exists, so non-btrfs / live sessions don't go degraded.
+systemctl disable snapper-cleanup.timer snapper-timeline.timer snapper-boot.timer 2>/dev/null || true
+
+# zram config — half of RAM, zstd compression
+cat > /etc/default/zramswap <<'EOF'
+ALGO=zstd
+PERCENT=50
+PRIORITY=100
+EOF
+
+# earlyoom config — keep system responsive when creative apps OOM
+cat > /etc/default/earlyoom <<'EOF'
+EARLYOOM_ARGS="-r 60 -m 5 -s 10 --avoid '(^|/)(init|systemd|sshd|kwin_wayland|kwin_x11|plasmashell|sddm)$' --prefer '(^|/)(chrom|firefox|blender|kdenlive|ardour|davinci|GIMP|krita|inkscape)$'"
+EOF
+
+# /etc/os-release — GENERATED from the shipped version file so it is always correct
+# and in sync. (The static os-release.shadowfetch shipped EMPTY through 1.4.0, leaving
+# installed systems with a blank /etc/os-release; generating it fixes that permanently.)
+SFVER="$(cat /usr/share/shadowfetch/version 2>/dev/null || echo 1.5.0)"
+cat > /etc/os-release <<EOF
+NAME="Shadowfetch Linux"
+PRETTY_NAME="Shadowfetch Linux ${SFVER} (Umbra)"
+ID=shadowfetch
+ID_LIKE=debian
+VERSION="${SFVER} (Umbra)"
+VERSION_ID="${SFVER}"
+VERSION_CODENAME=umbra
+HOME_URL="https://www.shadowfetch.com/linux/"
+SUPPORT_URL="https://www.shadowfetch.com/linux/"
+BUG_REPORT_URL="https://www.shadowfetch.com/linux/"
+LOGO=shadowfetch
+EOF
+
+# /etc/issue and /etc/issue.net
+echo "Shadowfetch Linux $(cat /usr/share/shadowfetch/version 2>/dev/null) \\n \\l" > /etc/issue
+echo "Shadowfetch Linux $(cat /usr/share/shadowfetch/version 2>/dev/null)" > /etc/issue.net
+
+# /etc/motd — copied from shadowfetch-branding's canonical source
+# (avoids conffile-conflict with base-files which also ships /etc/motd)
+if [ -f /usr/share/shadowfetch/motd ]; then
+    cp /usr/share/shadowfetch/motd /etc/motd
+fi
+
+# Hostname
+echo "shadowfetch" > /etc/hostname
+
+# Flatpak: add Flathub
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
+
+# Plymouth: set our theme as default + regenerate initramfs to embed it.
+if [ -d /usr/share/plymouth/themes/shadowfetch ] && command -v plymouth-set-default-theme >/dev/null 2>&1; then
+    echo "[shadowfetch]   setting plymouth theme: shadowfetch"
+    plymouth-set-default-theme -R shadowfetch || \
+        plymouth-set-default-theme shadowfetch || true
+fi
+
+# Calamares rebranding: rename "Install Debian" -> "Install Shadowfetch Linux".
+# calamares-settings-debian on current Debian testing ships the launcher as
+# calamares-install-debian.desktop (the path was install-debian.desktop in older releases).
+for CALAMARES_DESKTOP in \
+    /usr/share/applications/calamares-install-debian.desktop \
+    /usr/share/applications/install-debian.desktop \
+    /usr/share/applications/calamares.desktop ; do
+    if [ -f "$CALAMARES_DESKTOP" ]; then
+        echo "[shadowfetch]   renaming Calamares launcher: $(basename "$CALAMARES_DESKTOP")"
+        sed -i \
+            -e 's/^Name=.*$/Name=Install Shadowfetch Linux/' \
+            -e 's/^GenericName=.*$/GenericName=System Installer/' \
+            -e 's/^Comment=.*$/Comment=Install Shadowfetch Linux to disk/' \
+            -e 's|^Icon=.*$|Icon=shadowfetch|' \
+            "$CALAMARES_DESKTOP" || true
+    fi
+done
+
+# Branded default avatar: desktop-base owns /etc/skel/.face.icon, so a package
+# shipping it conflicts; the hook overwrites it on the filesystem instead.
+if [ -f /usr/share/shadowfetch/face-icon.png ]; then
+    cp /usr/share/shadowfetch/face-icon.png /etc/skel/.face.icon
+fi
+
+echo "[shadowfetch] System defaults configured."
+
+# Mask standalone network daemons that the NM VPN GUI plugins + nfs-common pull in
+# and that auto-enable + listen on 0.0.0.0 (openvpn/strongSwan-charon/rpcbind). Keep the
+# NM plugins for one-click VPN; NM does not need these system units. Direct /dev/null
+# symlinks = masked (works in chroot without a running systemd).
+for _u in openvpn.service strongswan-starter.service rpcbind.service rpcbind.socket; do
+    ln -sf /dev/null "/etc/systemd/system/$_u"
+done
+echo "[shadowfetch] Masked openvpn/strongswan/rpcbind standalone daemons."

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Local AI
+Comment=Open Buzz shared compute, model status and private workspaces
+Exec=shadowfetch-control --page local-ai
+Icon=shadowfetch
+Terminal=false
+Categories=Utility;X-Shadowfetch-AI;
+Keywords=AI;Buzz;model;compute;workspace;local;private;
+StartupNotify=true

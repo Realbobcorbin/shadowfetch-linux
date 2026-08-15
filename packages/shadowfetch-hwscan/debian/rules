@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# The verdict table is a promise. Every wording rule the release notes
+# rely on (the low-core downgrade, the 16 GB CPU-only "relaxed pace"
+# sentence, the founder sentence reserved for >= 8 GB VRAM, the gloss
+# on "reduced context or quantization") is pinned by the fixture tests
+# in tests/. Run them at build so a wording regression fails the build
+# here, not the QEMU pass at freeze.
+override_dh_auto_test:
+	python3 -m unittest discover -s tests -v

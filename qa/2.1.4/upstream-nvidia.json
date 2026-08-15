@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-08-08T14:50:00-04:00",
+  "architecture": "amd64",
+  "distribution": "debian:13",
+  "official_documentation": {
+    "debian_installation": "https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/debian.html",
+    "driver_assistant": "https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/driver-assistant.html"
+  },
+  "repository": {
+    "base_url": "https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/",
+    "inrelease_sha256": "7e4b4ab5cb65ab087db286a1895057931be7575e2175603a82399add00644b97",
+    "inrelease_date": "Mon, 03 Aug 2026 08:26:30 +0000",
+    "signing_fingerprint": "02182E60104FCDC26EAE1B8597A5D4CB8793F200",
+    "signature_verified": true
+  },
+  "keyring": {
+    "url": "https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/cuda-keyring_1.1-1_all.deb",
+    "package": "cuda-keyring",
+    "version": "1.1-1",
+    "architecture": "all",
+    "sha256": "d0d4ef986a44400f9db33c600ef33a985175e7cc63d805a10e1839c7a1e78f5f"
+  },
+  "driver_assistant": {
+    "package": "nvidia-driver-assistant",
+    "version": "0.59.91.07-1",
+    "filename": "nvidia-driver-assistant_0.59.91.07-1_all.deb",
+    "sha256": "e860255271efb153d4391631ba0681bf74ca73a9d5d12150ecd094c440136182",
+    "supported_gpus_sha256": "b5d4d14aff1dfe44c3c0f1ce2a10fda86ea5790cc608f0d8c9e293df8c8933f4"
+  },
+  "rtx_5080": {
+    "pci_device_id": "0x2C02",
+    "name": "NVIDIA GeForce RTX 5080",
+    "open_kernel_supported": true
+  },
+  "release_time_packages": {
+    "nvidia_open": {
+      "version": "610.57.04-1",
+      "sha256": "3299a199859ac5dedf1c7b8623920c58cb776490f1f0a28bf5eba36a964d5312"
+    },
+    "nvidia_driver": {
+      "version": "610.57.04-1",
+      "sha256": "34887ee1810a85f40c0754a35cacf1fb4236218921c3cb1e79509f4bdef98bf4"
+    },
+    "nvidia_kernel_open_dkms": {
+      "version": "610.57.04-1",
+      "sha256": "1ac4a5fcd1ac3f70d123e61e1fdba8a68ed8b0154b2cbb641a8a2910d8f03136"
+    }
+  },
+  "policy": {
+    "selector": "nvidia-driver-assistant --distro debian:13",
+    "allowed_recommendations": [
+      "nvidia-open",
+      "nvidia-open-BRANCH",
+      "cuda-drivers",
+      "cuda-drivers-BRANCH"
+    ],
+    "transaction": "simulate first, reject removals, apply with apt-get --no-remove"
+  }
+}

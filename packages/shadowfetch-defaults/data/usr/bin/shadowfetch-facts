@@ -1,0 +1,515 @@
+#!/usr/bin/env python3
+"""shadowfetch-facts - everything true about THIS machine, with provenance.
+
+WHY THIS EXISTS
+
+Three things need the same knowledge and none of them should collect it
+separately: hardware repair needs to know which devices have no driver;
+package-source advice needs to know what is installed and from where; and a
+local AI technician is only worth having if it can read the actual machine
+rather than guess. Three copies of the detection logic would drift, and the one
+that drifted would be the one giving advice.
+
+EVERY FACT CARRIES ITS SOURCE
+
+Each collector records the exact command or file it read. That is not decoration.
+The intended consumer is a language model that will be asked "why is my wifi
+broken", and a model that cannot show where a claim came from will invent one
+that sounds right. A fact here is a reading with provenance attached, so the
+answer can be checked by the person receiving it.
+
+NOTHING HERE CHANGES THE MACHINE
+
+Read-only by construction: no installs, no writes outside a temp file, no
+systemctl start. It is safe to run on someone else's computer, which is the
+point - it is meant to be pasted into a bug report.
+
+DEGRADES, NEVER DIES
+
+A missing lspci, a restricted dmesg, a container with no /sys - all of these are
+normal, and each is recorded as an unavailable source rather than crashing the
+run. A facts tool that fails on unusual hardware is useless precisely where it
+is most needed. Every collector is individually guarded; one failure costs one
+section.
+"""
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import os
+import platform
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+VERSION = "1.0"
+TIMEOUT = 8
+
+
+# --------------------------------------------------------------- plumbing
+def run(cmd, timeout=TIMEOUT):
+    """(ok, stdout, note). Never raises. `note` explains any failure."""
+    exe = cmd[0] if isinstance(cmd, list) else cmd.split()[0]
+    if not shutil.which(exe):
+        return False, "", f"{exe} not installed"
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        if p.returncode != 0:
+            return False, p.stdout, f"{exe} exited {p.returncode}: {p.stderr.strip()[:120]}"
+        return True, p.stdout, ""
+    except subprocess.TimeoutExpired:
+        return False, "", f"{exe} timed out after {timeout}s"
+    except Exception as exc:                                   # noqa: BLE001
+        return False, "", f"{exe} failed: {type(exc).__name__}"
+
+
+def read(path):
+    try:
+        return Path(path).read_text(errors="replace")
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
+def section(source):
+    """Wrap a collector so one bad section cannot end the run."""
+    def deco(fn):
+        def inner():
+            try:
+                data = fn()
+            except Exception as exc:                           # noqa: BLE001
+                return {"source": source, "available": False,
+                        "note": f"collector raised {type(exc).__name__}: {exc}"[:160]}
+            if isinstance(data, dict) and data.get("__unavailable"):
+                return {"source": source, "available": False,
+                        "note": data.get("note", "")}
+            return {"source": source, "available": True, "data": data}
+        return inner
+    return deco
+
+
+def unavailable(note):
+    return {"__unavailable": True, "note": note}
+
+
+# --------------------------------------------------------------- collectors
+@section("platform, /etc/os-release, /proc/uptime")
+def sys_identity():
+    osr = {}
+    for line in (read("/etc/os-release") or "").splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            osr[k] = v.strip().strip('"')
+    up = read("/proc/uptime")
+    # Exits 1 and prints "none" on bare metal. Non-zero here is an ANSWER,
+    # not a failure; checking the return code alone reported "unknown" on
+    # every physical machine.
+    virt_ok, virt, _ = run(["systemd-detect-virt"])
+    virt_text = (virt or "").strip()
+    return {
+        "hostname": socket.gethostname(),
+        "kernel": platform.release(),
+        "arch": platform.machine(),
+        "os_name": osr.get("PRETTY_NAME") or osr.get("NAME"),
+        "os_id": osr.get("ID"),
+        "os_version_id": osr.get("VERSION_ID"),
+        "debian_version": (read("/etc/debian_version") or "").strip() or None,
+        "uptime_seconds": int(float(up.split()[0])) if up else None,
+        "virtualisation": virt_text or ("none" if virt_ok else None),
+        "container": os.path.exists("/.dockerenv") or virt_text in ("podman", "docker", "lxc"),
+    }
+
+
+@section("/proc/cpuinfo, os.cpu_count, /proc/loadavg")
+def cpu():
+    info = read("/proc/cpuinfo") or ""
+    model = next((l.split(":", 1)[1].strip() for l in info.splitlines()
+                  if l.startswith("model name")), None)
+    flags = next((set(l.split(":", 1)[1].split()) for l in info.splitlines()
+                  if l.startswith("flags")), set())
+    return {
+        "model": model,
+        "threads": os.cpu_count(),
+        "physical_cores": len({l.split(":")[1].strip() for l in info.splitlines()
+                               if l.startswith("core id")}) or None,
+        "load_1m": os.getloadavg()[0],
+        "virtualisation_ext": bool(flags & {"vmx", "svm"}),
+        # These decide which local models are realistic, so the AI-facing
+        # consumer needs them explicitly rather than inferring from the name.
+        "avx2": "avx2" in flags,
+        "avx512": any(f.startswith("avx512") for f in flags),
+    }
+
+
+@section("/proc/meminfo")
+def memory():
+    m = {}
+    for line in (read("/proc/meminfo") or "").splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            parts = v.strip().split()
+            if parts and parts[0].isdigit():
+                m[k] = int(parts[0])
+    if not m:
+        return unavailable("/proc/meminfo unreadable")
+    gib = lambda k: round(m.get(k, 0) / 1024 ** 2, 2)          # noqa: E731
+    return {"total_gib": gib("MemTotal"), "available_gib": gib("MemAvailable"),
+            "swap_total_gib": gib("SwapTotal"), "swap_free_gib": gib("SwapFree")}
+
+
+@section("shutil.disk_usage, findmnt")
+def storage():
+    out = {"filesystems": []}
+    ok, mnt, note = run(["findmnt", "-J", "-t",
+                         "ext4,btrfs,xfs,vfat,f2fs,zfs", "-o",
+                         "TARGET,SOURCE,FSTYPE,OPTIONS"])
+    if ok:
+        try:
+            for fs in json.loads(mnt).get("filesystems", []):
+                tgt = fs.get("target")
+                try:
+                    du = shutil.disk_usage(tgt)
+                    free = round(du.free / 1024 ** 3, 1)
+                    pct = round(du.used / du.total * 100)
+                except Exception:                              # noqa: BLE001
+                    free = pct = None
+                out["filesystems"].append({
+                    "mount": tgt, "device": fs.get("source"),
+                    "fstype": fs.get("fstype"), "free_gib": free, "used_pct": pct,
+                })
+        except Exception:                                      # noqa: BLE001
+            pass
+    root = shutil.disk_usage("/")
+    out["root_free_gib"] = round(root.free / 1024 ** 3, 1)
+    out["root_used_pct"] = round(root.used / root.total * 100)
+    out["btrfs_root"] = any(f.get("mount") == "/" and f.get("fstype") == "btrfs"
+                            for f in out["filesystems"])
+    out["snapper_present"] = bool(shutil.which("snapper"))
+    return out
+
+
+# ---- the two collectors the repair feature is built on ----------------------
+@section("lspci -Dnnk / lsusb")
+def devices():
+    """Every PCI device, and CRUCIALLY whether a kernel driver is bound.
+
+    A device with no driver is the machine-readable form of "my wifi does not
+    work". This is the single most useful fact the tool produces.
+    """
+    ok, out, note = run(["lspci", "-Dnnk"])
+    if not ok:
+        return unavailable(note or "lspci unavailable")
+    devs, cur = [], None
+    for line in out.splitlines():
+        if not line.startswith((" ", "\t")):
+            if cur:
+                devs.append(cur)
+            m = re.match(r"^(\S+)\s+([^:]+):\s+(.*?)\s*(\[[0-9a-f]{4}:[0-9a-f]{4}\])?$", line)
+            cur = {"slot": m.group(1) if m else None,
+                   "class": m.group(2).strip() if m else None,
+                   "name": m.group(3).strip() if m else line.strip(),
+                   "pci_id": (m.group(4) or "").strip("[]") if m else None,
+                   "driver": None, "modules": []}
+        elif cur is not None:
+            s = line.strip()
+            if s.startswith("Kernel driver in use:"):
+                cur["driver"] = s.split(":", 1)[1].strip()
+            elif s.startswith("Kernel modules:"):
+                cur["modules"] = [x.strip() for x in s.split(":", 1)[1].split(",")]
+    if cur:
+        devs.append(cur)
+
+    interesting = re.compile(r"network|ethernet|vga|display|3d|audio|wireless|bluetooth",
+                             re.I)
+    unbound = [d for d in devs
+               if not d["driver"] and interesting.search(d.get("class") or "")]
+    return {"count": len(devs), "devices": devs,
+            "unbound_important": unbound,
+            "unbound_count": len(unbound)}
+
+
+@section("dmesg / journalctl -k, /lib/firmware")
+def firmware():
+    """Firmware the kernel asked for and did not get.
+
+    On Debian this is the commonest reason perfectly ordinary hardware does
+    nothing: the driver loads, requests a blob from the non-free-firmware
+    component, fails, and the device stays dark with no visible error.
+    """
+    ok, out, note = run(["dmesg", "--level=err,warn", "--notime"], 10)
+    src = "dmesg"
+    if not ok:
+        ok, out, note2 = run(["journalctl", "-k", "-p", "warning", "-n", "2000",
+                              "--no-pager"], 12)
+        src = "journalctl -k"
+        note = "" if ok else f"{note}; {note2}"
+    if not ok:
+        return unavailable(note or "no kernel log reachable (normal in a container)")
+
+    pat = re.compile(r"(?:firmware|fw).{0,40}?([\w./+-]+\.(?:bin|ucode|fw|elf|ldb|sbcf))",
+                     re.I)
+    missing, seen = [], set()
+    for line in out.splitlines():
+        if not re.search(r"fail|not found|no such|missing|error", line, re.I):
+            continue
+        m = pat.search(line)
+        if not m:
+            continue
+        blob = m.group(1)
+        if blob in seen:
+            continue
+        seen.add(blob)
+        missing.append({"blob": blob,
+                        "present_on_disk": os.path.exists(f"/lib/firmware/{blob}"),
+                        "line": line.strip()[:180]})
+    return {"log_source": src, "missing_count": len(missing), "missing": missing}
+
+
+@section("ip -j link, /sys/class/net")
+def network():
+    ifaces = []
+    ok, out, note = run(["ip", "-j", "link", "show"])
+    if ok:
+        try:
+            for i in json.loads(out):
+                name = i.get("ifname")
+                drv = None
+                dl = Path(f"/sys/class/net/{name}/device/driver")
+                if dl.is_symlink():
+                    drv = os.path.basename(os.readlink(dl))
+                ifaces.append({"name": name, "state": i.get("operstate"),
+                               "mac": i.get("address"), "driver": drv,
+                               "wireless": Path(f"/sys/class/net/{name}/wireless").exists()})
+        except Exception:                                      # noqa: BLE001
+            pass
+    if not ifaces:
+        for p in sorted(glob.glob("/sys/class/net/*")):
+            ifaces.append({"name": os.path.basename(p), "state": None,
+                           "mac": None, "driver": None, "wireless": False})
+    return {"interfaces": ifaces,
+            "has_carrier": any(i.get("state") == "UP" for i in ifaces)}
+
+
+@section("lspci class 03xx, /sys/class/drm, glxinfo")
+def graphics():
+    ok, out, _ = run(["lspci", "-Dnnk"])
+    cards = []
+    if ok:
+        block = None
+        for line in out.splitlines():
+            if not line.startswith((" ", "\t")):
+                block = line if re.search(r"VGA|3D|Display", line, re.I) else None
+                if block:
+                    m = re.match(r"^\S+\s+[^:]+:\s+(.*)$", line)
+                    name = (m.group(1) if m else line).strip()
+                    name = re.sub(r"\s*\[[0-9a-f]{4}:[0-9a-f]{4}\]\s*$", "", name)
+                    cards.append({"name": name, "driver": None})
+            elif block and line.strip().startswith("Kernel driver in use:"):
+                cards[-1]["driver"] = line.split(":", 1)[1].strip()
+    ok2, gl, _ = run(["glxinfo", "-B"], 6)
+    renderer = None
+    if ok2:
+        renderer = next((l.split(":", 1)[1].strip() for l in gl.splitlines()
+                         if "OpenGL renderer" in l), None)
+    return {"cards": cards,
+            "renderer": renderer,
+            "accelerated": bool(renderer and "llvmpipe" not in renderer.lower()),
+            "software_rendering": bool(renderer and "llvmpipe" in renderer.lower()),
+            "nvidia_smi": shutil.which("nvidia-smi") is not None,
+            "drm_nodes": sorted(os.path.basename(p) for p in glob.glob("/dev/dri/card*"))}
+
+
+@section("apt-cache policy, /etc/apt/sources.list*, flatpak remotes")
+def package_sources():
+    srcs = []
+    for f in ["/etc/apt/sources.list"] + sorted(glob.glob("/etc/apt/sources.list.d/*")):
+        txt = read(f)
+        if not txt:
+            continue
+        for line in txt.splitlines():
+            s = line.strip()
+            if s.startswith("deb ") or s.startswith("deb-src "):
+                srcs.append({"file": f, "line": s[:180]})
+            elif s.startswith("URIs:"):
+                srcs.append({"file": f, "line": s[:180]})
+    ok, held, _ = run(["apt-mark", "showhold"])
+    ok2, audit, _ = run(["dpkg", "--audit"], 15)
+    fl = []
+    okf, fout, _ = run(["flatpak", "remotes", "--columns=name,url"], 10)
+    if okf:
+        fl = [dict(zip(("name", "url"), l.split("\t")))
+              for l in fout.strip().splitlines() if "\t" in l]
+    return {
+        "apt_sources": srcs,
+        "apt_source_count": len(srcs),
+        "has_backports": any("backports" in s["line"] for s in srcs),
+        "has_nonfree_firmware": any("non-free-firmware" in s["line"] for s in srcs),
+        "has_shadowfetch_repo": any("shadowfetch" in s["line"] for s in srcs),
+        "held_packages": [h for h in held.splitlines() if h.strip()] if ok else [],
+        "dpkg_consistent": bool(ok2 and not audit.strip()),
+        "flatpak_remotes": fl,
+        "has_flathub": any("flathub" in (r.get("name") or "").lower() for r in fl),
+    }
+
+
+@section("dpkg-query, which")
+def shadowfetch_stack():
+    ok, ver, _ = run(["dpkg-query", "-W", "-f=${Version}", "shadowfetch-defaults"])
+    tools = {}
+    for t in ["shadowfetch-gpu", "shadowfetch-buzz", "shadowfetch-health",
+              "shadowfetch-update", "shadowfetch-control",
+              "shadowfetch-agent-workspace", "shadowfetch-agent-doctor",
+              "shadowfetch-agent-tools"]:
+        tools[t] = shutil.which(t) is not None
+    return {
+        "defaults_version": ver.strip() if ok else None,
+        "installed_on_shadowfetch": bool(ok),
+        "tools": tools,
+        "runtimes": {r: shutil.which(r) is not None
+                     for r in ("podman", "docker", "buzz-desktop", "buzz",
+                               "buzz-agent", "flatpak")},
+        "version_file": (read("/usr/share/shadowfetch/version") or "").strip() or None,
+    }
+
+
+@section("systemctl --failed")
+def services():
+    ok, out, note = run(["systemctl", "--failed", "--no-legend", "--plain"], 10)
+    if not ok:
+        return unavailable(note or "systemd not reachable")
+    failed = [l.split()[0] for l in out.splitlines() if l.strip()]
+    return {"failed_count": len(failed), "failed_units": failed}
+
+
+COLLECTORS = {
+    "system": sys_identity, "cpu": cpu, "memory": memory, "storage": storage,
+    "devices": devices, "firmware": firmware, "network": network,
+    "graphics": graphics, "packages": package_sources,
+    "shadowfetch": shadowfetch_stack, "services": services,
+}
+
+
+def collect(only=None):
+    started = time.time()
+    facts, timings = {}, {}
+    for name, fn in COLLECTORS.items():
+        if only and name not in only:
+            continue
+        t0 = time.time()
+        facts[name] = fn()
+        timings[name] = round(time.time() - t0, 3)
+    return {
+        "facts_version": VERSION,
+        "collected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "elapsed_seconds": round(time.time() - started, 2),
+        "running_as_root": os.geteuid() == 0,
+        "section_seconds": timings,
+        "unavailable_sections": [k for k, v in facts.items() if not v.get("available")],
+        "facts": facts,
+    }
+
+
+# ------------------------------------------------------------------ output
+def human(doc):
+    f = doc["facts"]
+    out = []
+
+    def val(sec, *keys, default="unknown"):
+        node = f.get(sec, {})
+        if not node.get("available"):
+            return None
+        d = node["data"]
+        for k in keys:
+            d = (d or {}).get(k)
+        return d if d is not None else default
+
+    out.append(f"Shadowfetch facts {doc['facts_version']}  ·  "
+               f"{doc['collected_at']}  ·  {doc['elapsed_seconds']}s")
+    out.append("")
+    out.append(f"  {val('system','os_name') or '?'} · kernel {val('system','kernel') or '?'}"
+               f" · {val('system','arch') or '?'}")
+    if val("system", "virtualisation") not in (None, "none"):
+        out.append(f"  running under {val('system','virtualisation')}")
+    out.append(f"  {val('cpu','model') or 'CPU unknown'} "
+               f"({val('cpu','threads')} threads)")
+    out.append(f"  RAM {val('memory','total_gib')} GiB total, "
+               f"{val('memory','available_gib')} GiB available")
+    out.append(f"  Root filesystem {val('storage','root_free_gib')} GiB free "
+               f"({val('storage','root_used_pct')}% used)"
+               + ("  · btrfs" if val("storage", "btrfs_root") else ""))
+
+    g = f.get("graphics", {})
+    if g.get("available"):
+        for c in g["data"]["cards"]:
+            out.append(f"  GPU  {c['name'][:64]}  driver={c['driver'] or 'NONE'}")
+        if g["data"].get("software_rendering"):
+            out.append("       software rendering — no GPU acceleration in use")
+
+    out.append("")
+    d = f.get("devices", {})
+    if d.get("available") and d["data"]["unbound_count"]:
+        out.append(f"  {d['data']['unbound_count']} device(s) with NO kernel driver bound:")
+        for x in d["data"]["unbound_important"]:
+            mods = ", ".join(x["modules"]) or "no module suggested"
+            out.append(f"    {x['class']}: {x['name'][:56]}")
+            out.append(f"      candidate modules: {mods}")
+    elif d.get("available"):
+        out.append("  All network, graphics and audio devices have a driver bound.")
+    else:
+        out.append(f"  Devices: not collected ({d.get('note')})")
+
+    fw = f.get("firmware", {})
+    if fw.get("available") and fw["data"]["missing_count"]:
+        out.append(f"  {fw['data']['missing_count']} firmware file(s) the kernel "
+                   f"asked for and did not get:")
+        for m in fw["data"]["missing"][:8]:
+            out.append(f"    {m['blob']}")
+    elif fw.get("available"):
+        out.append("  No firmware load failures in the kernel log.")
+    else:
+        out.append(f"  Firmware: not collected ({fw.get('note')})")
+
+    p = f.get("packages", {})
+    if p.get("available"):
+        pd = p["data"]
+        out.append("")
+        out.append(f"  apt sources: {pd['apt_source_count']}"
+                   f" · backports={pd['has_backports']}"
+                   f" · non-free-firmware={pd['has_nonfree_firmware']}"
+                   f" · flathub={pd['has_flathub']}")
+        if pd["held_packages"]:
+            out.append(f"  held packages: {', '.join(pd['held_packages'])}")
+        if not pd["dpkg_consistent"]:
+            out.append("  dpkg database needs repair (run: sudo dpkg --configure -a)")
+
+    if doc["unavailable_sections"]:
+        out.append("")
+        out.append(f"  not collected: {', '.join(doc['unavailable_sections'])}")
+    return "\n".join(out)
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="shadowfetch-facts",
+        description="Read-only inventory of this machine, with the source of every fact.")
+    ap.add_argument("--json", action="store_true", help="emit structured JSON")
+    ap.add_argument("--section", action="append",
+                    choices=sorted(COLLECTORS), help="collect only these (repeatable)")
+    ap.add_argument("--version", action="version",
+                    version=f"shadowfetch-facts (Shadowfetch Linux) {VERSION}")
+    args = ap.parse_args()
+
+    doc = collect(set(args.section) if args.section else None)
+    print(json.dumps(doc, indent=2) if args.json else human(doc))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(130)

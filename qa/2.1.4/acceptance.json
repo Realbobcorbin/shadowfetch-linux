@@ -1,0 +1,875 @@
+{
+  "schema_version": 1,
+  "release": {
+    "version": "2.1.4",
+    "edition": "Fire Edition",
+    "codename": "Umbra"
+  },
+  "evidence_root": "work/qa-2.1.4/evidence",
+  "artifact": {
+    "iso_path": "shadowfetch-2.1.4-amd64.iso",
+    "iso_sha256": "81a906788ec48150d4a4527b4d9e7b09a974d3d577f1bd32ba3f333df8a1a86b",
+    "iso_size_bytes": 3968475136,
+    "signature_path": "shadowfetch-2.1.4-amd64.iso.asc",
+    "signing_fingerprint": "8F13CE1535EE1F4A2916A1F73C5C900B7BE80CA1",
+    "evidence_bundle_path": "work/release-2.1.4/evidence-bundle-2.1.4.tar.gz",
+    "evidence_bundle_sha256": "00491daecc643748a1710266136d3af3a77b6db68cbd732f6b652ffaf66f282d"
+  },
+  "cases": [
+    {
+      "id": "SRC-01",
+      "phase": "prepublish",
+      "area": "source",
+      "title": "Focused source and behavior suite passes",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "source/source-gate-ssh-fix.log",
+          "sha256": "d481a225f45d8bfe738d42ff729093da8af363db4d4ad0c8c2b5e966dfeefddc"
+        }
+      ],
+      "notes": "Post-SSH-firewall-fix source gate passed all behavioral suites, 151 focused package tests, 22 tool tests, ShellCheck, parsers, desktop validation, whitespace, Gitleaks, downloader scan, and retired-runtime scan."
+    },
+    {
+      "id": "SRC-02",
+      "phase": "prepublish",
+      "area": "source",
+      "title": "ShellCheck, syntax and whitespace gates pass",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "source/source-gate-ssh-fix.log",
+          "sha256": "d481a225f45d8bfe738d42ff729093da8af363db4d4ad0c8c2b5e966dfeefddc"
+        }
+      ],
+      "notes": "Post-SSH-firewall-fix syntax, ShellCheck, parser, desktop-entry, and Git whitespace gates passed."
+    },
+    {
+      "id": "SRC-03",
+      "phase": "prepublish",
+      "area": "source",
+      "title": "Secret scan and retired OpenClaw and Hermes runtime scan pass",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "source/source-gate-ssh-fix.log",
+          "sha256": "d481a225f45d8bfe738d42ff729093da8af363db4d4ad0c8c2b5e966dfeefddc"
+        }
+      ],
+      "notes": "Post-SSH-firewall-fix Gitleaks candidate/history scans and retired OpenClaw, Hermes, Ollama, llama runtime scan passed."
+    },
+    {
+      "id": "PKG-01",
+      "phase": "prepublish",
+      "area": "packages",
+      "title": "Every binary and corresponding source package builds",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "packages/package-gate-ssh-fix.log",
+          "sha256": "ac3fc16d1860850bdbac045312427aa70f7795e469beffc81e1ec112a2108070"
+        }
+      ],
+      "notes": "Post-SSH-firewall-fix package gate rebuilt and signed all 15 binary and 13 source packages; shadowfetch-defaults includes the idempotent upgrade postinst."
+    },
+    {
+      "id": "PKG-02",
+      "phase": "prepublish",
+      "area": "packages",
+      "title": "Signed local repository and package install smoke test pass",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "packages/package-gate-ssh-fix.log",
+          "sha256": "ac3fc16d1860850bdbac045312427aa70f7795e469beffc81e1ec112a2108070"
+        }
+      ],
+      "notes": "Post-fix signed APT index, source extraction, Lintian, payload ownership/modes, retired-runtime scan, Debian 13 dependency solve, runtime install, and helper smoke checks passed."
+    },
+    {
+      "id": "ISO-01",
+      "phase": "prepublish",
+      "area": "image",
+      "title": "ISO structure, checksum and detached signature verify",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "iso/iso-gate-final.log",
+          "sha256": "878bae24cf5713bd58b208629ab380913f1ad0e24d514119c7d64216f2248859"
+        },
+        {
+          "kind": "log",
+          "path": "iso/rebuild-after-gpu-fix.log",
+          "sha256": "ad35fb06fd672f35403661c2444dea7aad1184b277f1914e7d9724082136afe3"
+        },
+        {
+          "kind": "log",
+          "path": "source/full-test-after-gpu-fix.log",
+          "sha256": "be62bc648db9fe422ad618d42586cff4605b5bc954c3cef15cfe064a9427a785"
+        }
+      ],
+      "notes": "Final 81a90678 ISO gate (frozen snapshot iso-gate-final.log so the record is stable against later gate re-runs by pre-release-check/fleet timers): ISO_GATE_PASSED \u2014 checksum+detached signature, BIOS/UEFI hybrid, squashfs/package contract (helpers absent, trap guarded), Buzz consent-gated/loopback/digest-pinned, APT trust, Calamares, UFW+live-SSH. make test green pre-build."
+    },
+    {
+      "id": "BOOT-01",
+      "phase": "prepublish",
+      "area": "boot",
+      "title": "Final ISO reaches the live Plasma desktop in BIOS mode",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "vm/rel4-bios-live/boot-live.log",
+          "sha256": "81f220274bbbbb5470f79d6524d0d838a710f124a9f391b51f9f77f47e1b3d25"
+        },
+        {
+          "kind": "screenshot",
+          "path": "vm/rel4-bios-live/live-desktop.png",
+          "sha256": "e4968f424b4ddaa8ef5d96e2f8603c18bdc40bcbb9417a183fd77c1eada1dfb6"
+        },
+        {
+          "kind": "log",
+          "path": "vm/rel4-bios-live/criteria-eval.txt",
+          "sha256": "1026e539031959a66785e9338a828166052b2dce339b9dc951f97146abf229a8"
+        }
+      ],
+      "notes": "Final 81a90678 candidate reached a healthy Plasma desktop in legacy BIOS mode (SeaBIOS, efi sysfs absent): 2.1.4, system running, zero failed units, ro live media iso9660, retired-runtimes=none, consent-gated Buzz, UFW rate-limited SSH. Lane verified all criteria and withheld self-record over a stale sha literal; orchestrator confirmed 81a90678 is the intended candidate (sha256sum+GPG+gate) and recorded from lane evidence."
+    },
+    {
+      "id": "BOOT-02",
+      "phase": "prepublish",
+      "area": "boot",
+      "title": "Final ISO reaches the live Plasma desktop in UEFI mode",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "vm/rel4-uefi-live/boot-live.log",
+          "sha256": "da23383abb81416ab51a56d965c91b72c7e94891349976cc6d303b1c86dbb0cf"
+        },
+        {
+          "kind": "screenshot",
+          "path": "vm/rel4-uefi-live/live-desktop.png",
+          "sha256": "e4968f424b4ddaa8ef5d96e2f8603c18bdc40bcbb9417a183fd77c1eada1dfb6"
+        }
+      ],
+      "notes": "rel4 candidate (health log embeds candidate_sha256=81a906788ec48150d4a4527b4d9e7b09a974d3d577f1bd32ba3f333df8a1a86b, size 3968475136 = on-disk ISO) reached a healthy Plasma desktop under OVMF UEFI; QGA confirmed UEFI_CONFIRMED, VERSION_ID 2.1.4 (Umbra), systemctl running with zero failed units, ISO media mounted ro iso9660 (/dev/sr0), pristine unpartitioned 120G virtio target (vda), retired-runtimes=none, Buzz consent-gated (buzz/buzz-desktop/buzz-agent), UFW active with rate-limited OpenSSH. DISCREPANCY: lane brief PASS-criteria/notes cited candidate_sha256=068d82fe which matches neither this build (81a906788ec) nor prior rel3 (e6c6627f); recorded the value actually embedded by a29_live_health.sh and verified against the on-disk ISO."
+    },
+    {
+      "id": "INSTALL-01",
+      "phase": "prepublish",
+      "area": "install",
+      "title": "Clean UEFI Btrfs installation survives reboot and health checks",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "vm/rel4-uefi-encrypted/installed-health-current.log",
+          "sha256": "cc8bcfe071cfe37967e8b24f8f5d5eabd8f56e856a98b5970920fbe1b84d44e1"
+        },
+        {
+          "kind": "screenshot",
+          "path": "vm/rel4-uefi-encrypted/installed-desktop-first-login.png",
+          "sha256": "0a7555199663bd6e7636805fa52444262e2c783020c19341c4630d39a2823192"
+        }
+      ],
+      "notes": "Fresh 81a90678 UEFI installation: Calamares erase-disk+encrypt, cold boot without ISO, LUKS2 unlock, first-login desktop as umbraq; UEFI firmware, grub-efi, EFI boot entry, LUKS2/Btrfs subvolumes, zero failed units, full a32 installed acceptance battery passed."
+    },
+    {
+      "id": "INSTALL-02",
+      "phase": "prepublish",
+      "area": "install",
+      "title": "Clean BIOS encrypted installation survives reboot and unlock",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "vm/rel4-bios-encrypted/installed-health-current.log",
+          "sha256": "51587ee6a961ea9773a7b4103da428fb11a8f4711e0ed0f3e76c243f280e0600"
+        },
+        {
+          "kind": "screenshot",
+          "path": "vm/rel4-bios-encrypted/installed-desktop-first-login.png",
+          "sha256": "6ca996e498d036166427931a63b221c3bc31832dd38bc95b9674d474c1e554b4"
+        }
+      ],
+      "notes": "Fresh 81a90678 BIOS installation: Calamares erase-disk+encrypt, cold boot, LUKS2 unlock, first-login desktop as relbios; BIOS firmware, grub-pc 2.14-3, LUKS2/Btrfs subvolumes, zero failed units, full release BIOS installed battery passed."
+    },
+    {
+      "id": "UPGRADE-01",
+      "phase": "prepublish",
+      "area": "upgrade",
+      "title": "Overlay clone of a real 2.1.3 installation upgrades with user data intact",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "upgrade/rel4-direct-from-2.1.3/post-reboot.log",
+          "sha256": "24e062ace4a324907aa9e8b0ee4fffe0cb7e57ccb1fa20017fefb82d4bd497fa"
+        },
+        {
+          "kind": "log",
+          "path": "upgrade/rel4-direct-from-2.1.3/transaction.log",
+          "sha256": "aec86f965fb6f1664e515cf8453b3412393f9c0bb7a67b4bf124bad4c2d4bbc9"
+        },
+        {
+          "kind": "log",
+          "path": "upgrade/rel4-direct-from-2.1.3/plan.log",
+          "sha256": "9abd5c8bbdb1357c2149ccd230676739016493bac760533452b6c786237eeb3d"
+        },
+        {
+          "kind": "log",
+          "path": "upgrade/rel4-direct-from-2.1.3/baseline.log",
+          "sha256": "188ed8a5886bf853855919b582681ceb73d6584f1df88c905b53332a3b12177e"
+        }
+      ],
+      "notes": "Direct APT upgrade from a real 2.1.3 overlay clone to 81a90678 2.1.4 via the removal-free bridge + shadowfetch-update (run as a transient unit; first attempt interrupted only by the qemu-ga-restart harness artifact): rebooted into 2.1.4, only sanctioned migration removals (incl. the documented Plasma 6.6->6.7 replacement pair), user-data canaries intact, zero failed units, health 9/0/0."
+    },
+    {
+      "id": "AI-01",
+      "phase": "prepublish",
+      "area": "local-ai",
+      "title": "Buzz recommends and downloads a compatible open model and completes a real inference",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "buzz/rel4-uefi-encrypted/final-acceptance.log",
+          "sha256": "89a86009cc5eb90ffcf10bd2181e0b545137379946c9949bf063564162db6697"
+        },
+        {
+          "kind": "log",
+          "path": "buzz/rel4-uefi-encrypted/inference.log",
+          "sha256": "4a620d086edf51aa169e5d086125e52944e9e24d3092c6f9f19b257e3b8b5b00"
+        },
+        {
+          "kind": "screenshot",
+          "path": "buzz/rel4-uefi-encrypted/buzz-model-ready.png",
+          "sha256": "eb7d2aff03c12d58e5d5f74f5fb8cdd261a9b785903af309cc761dd87c89a03d"
+        }
+      ],
+      "notes": "Buzz recommended+downloaded gemma Q4_K_M (blob verified), served on loopback 9337, real completion returned UMBRA_AI_OK."
+    },
+    {
+      "id": "AI-02",
+      "phase": "prepublish",
+      "area": "local-ai",
+      "title": "Buzz model download handles offline failure, reconnect and retry without false success",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/ai02-offline-start.log",
+          "sha256": "8a7b5c9ae47fbef90a65906618052f349ce436fd5940c6312e9191d234d2e2c7"
+        },
+        {
+          "kind": "screenshot",
+          "path": "failure-paths/rel4-uefi-encrypted/ai02-offline-stall.png",
+          "sha256": "51537265023edd6e1437aebb43847ab17f0ec087e1ed348ed220fdf5902fc8f9"
+        },
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/ai02-offline-models-check.log",
+          "sha256": "eb3d6087232276522004a4a799a49ebefc20044bec1b952abb6b650626604e4e"
+        },
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/ai02-reconnect.log",
+          "sha256": "72ce3786ce574f72331e7a829d22f1259311eef8984ebc155e175b473e89bfdd"
+        },
+        {
+          "kind": "screenshot",
+          "path": "failure-paths/rel4-uefi-encrypted/ai02-resume.png",
+          "sha256": "d762af9fa5cedf353b9b58d109eb88efc1198d4562aa3de1b81d8b50da1b991c"
+        },
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/ai02-inference.log",
+          "sha256": "29cf9fe1d082407b47421bb34e2701ccd7fbf9a0c2f07cc2c272e11d669d46f6"
+        }
+      ],
+      "notes": "Offline mid-download (QMP set_link net0 down): enp0s3 NO-CARRIER, download froze at 12%/0.6GB, 9337 did not serve the model (GEMMA_LISTED=0) - no false success. After reconnect (net0 up) the download resumed to 78% and completed; model served on loopback 9337; inference returned UMBRA_AI_OK. Full recovery."
+    },
+    {
+      "id": "AI-03",
+      "phase": "prepublish",
+      "area": "local-ai",
+      "title": "Low disk, cancelled Buzz model download and changed upstream metadata fail safely",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-bios-encrypted/cancel-offline-lowdisk.log",
+          "sha256": "9681a9f3e7183e9a821594870e7366583b791eda48ff30239e79163e5990ed30"
+        },
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/lowdisk-injection.log",
+          "sha256": "3311475069291d9a7638bc6a6f71ce6ce57a195acf20ecf71a69b3ef19d55c5b"
+        },
+        {
+          "kind": "screenshot",
+          "path": "failure-paths/rel4-uefi-encrypted/lowdisk-error.png",
+          "sha256": "07a861f25dea096cca605fd67aab8dcf7ef8a07a9149cff307bca4b4f8cfa00e"
+        },
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/lowdisk-nofalsesuccess.log",
+          "sha256": "7fa3fa1a23aefc3f4277d2cd2869a1d88138ac2e58516122ab3128138a912a43"
+        },
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/lowdisk-inference.log",
+          "sha256": "cb78772064cad73ac79c3cd83176bdf65b171cd6367c5271ca99d4d5f4a87b58"
+        },
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/stale-metadata.log",
+          "sha256": "653d3fda1f1f9096c71bf3b8dc2f9a0b86320a63500c306f6171b205bac18cc5"
+        },
+        {
+          "kind": "screenshot",
+          "path": "failure-paths/rel4-uefi-encrypted/stale-metadata-rebuilding.png",
+          "sha256": "4928b618eda73a4a2b793af434be8c86d565d94321755a751d09bd824e7aff9e"
+        },
+        {
+          "kind": "log",
+          "path": "failure-paths/rel4-uefi-encrypted/stale-cleanup-verification.log",
+          "sha256": "f896f5ea3af8f155405485d65d6ea7e94d58da5d5c4883e0f1ff278e18e4dbaa"
+        }
+      ],
+      "notes": "AI-03 (a) BIOS-lane cancel/offline/lowdisk gate A32_BUZZ_FAILURE_PATHS_PASS (other agent). (b) UEFI-encrypted lowdisk: disk filled to 1.6G, download froze at 27% with NO served model (GEMMA_LISTED=0, blob .incomplete) - no false success; after freeing disk, model re-downloaded (8.09GB layers) and inference returned UMBRA_AI_OK. (c) stale-metadata: fake revision/blob injected, Buzz auto-recovered real revision bfc15c38, rebuilt 8.09GB layer cache, UMBRA_AI_OK, A32_STALE_METADATA_RECOVERY_PASS; cleanup verification shows fake artifacts ABSENT and real cache intact. No injection produced a false success."
+    },
+    {
+      "id": "BUZZ-01",
+      "phase": "prepublish",
+      "area": "buzz",
+      "title": "Rootless Buzz stack passes ordered readiness and loopback binding checks",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "buzz/rel4-uefi-encrypted/final-acceptance.log",
+          "sha256": "89a86009cc5eb90ffcf10bd2181e0b545137379946c9949bf063564162db6697"
+        },
+        {
+          "kind": "log",
+          "path": "buzz/rel4-uefi-encrypted/setup.log",
+          "sha256": "41669c235f8823311d113fe0dfd4e2fe428e274aca423be5ac749b1b1385206c"
+        },
+        {
+          "kind": "log",
+          "path": "buzz/rel4-uefi-encrypted/owner-bootstrap.log",
+          "sha256": "673fe132b4384f18d949cbf62999864c63169bfc3a07f3b6681afa12ae701471"
+        }
+      ],
+      "notes": "Rootless Buzz 0.5.8 stack on 81a90678 final VM: FIRST-RUN setup succeeded post DBus fix (no user-scope-bus failure line), ordered readiness, 4 digest-pinned healthy containers, loopback-only 3000/9337, mode-600 creds, single owner."
+    },
+    {
+      "id": "BUZZ-02",
+      "phase": "prepublish",
+      "area": "buzz",
+      "title": "Native Buzz Desktop connects to the local relay inside the final VM",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "screenshot",
+          "path": "buzz/rel4-uefi-encrypted/buzz-local-community-joined.png",
+          "sha256": "59207f5b1b722fed2eb4e6052eea685167ebfcac1ac8165e9b9f470833118bd4"
+        },
+        {
+          "kind": "screenshot",
+          "path": "buzz/rel4-uefi-encrypted/buzz-main-workspace.png",
+          "sha256": "f9e153f4b92c10595998859d02844cdc9cc26c06ae63ee42d487065b77161c7d"
+        },
+        {
+          "kind": "log",
+          "path": "buzz/rel4-uefi-encrypted/atspi-tree-join.log",
+          "sha256": "6ad0ecd5136a756ac97e816c1bb441276190b0b180b8499e5ff13bc06dd78da9"
+        }
+      ],
+      "notes": "Native Buzz Desktop 0.5.8 in the 81a90678 final VM connected to local relay ws://127.0.0.1:3000; AT-SPI tree proves live native window."
+    },
+    {
+      "id": "GPU-01",
+      "phase": "prepublish",
+      "area": "graphics",
+      "title": "Virtual and software renderer states are measured and reported honestly",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "vm/rel4-uefi-live/renderer-live.log",
+          "sha256": "f6954a5372e0379de986848b1c3fb20c1645c1fac22bd82b36bb9957483e9795"
+        },
+        {
+          "kind": "log",
+          "path": "vm/rel4-uefi-encrypted/renderer-installed.log",
+          "sha256": "4c8588400be5f04a62061e54c4058417121a994c89404f47c3796b2fdbd9686d"
+        }
+      ],
+      "notes": "virtio-vga VM measured honestly as software rendering in both live and installed sessions: glxinfo -B via Xwayland shows Device llvmpipe (LLVM 21.1.8), Accelerated: no, Mesa 26.1.5. shadowfetch-health --json runs clean (summary fail=0) with no hardware-acceleration claim; it has no renderer-specific check so the honest state is the glxinfo record plus a health run that neither fails nor misreports. This case's subject is the virtual/software path itself - VM evidence is the correct class here."
+    },
+    {
+      "id": "GPU-02",
+      "phase": "prepublish",
+      "area": "graphics",
+      "title": "NVIDIA new-generation driver workflow and rollback path validate",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "gpu/rel4/gpu02-verdict.log",
+          "sha256": "86898100eb53038eaff82ba08b3c8d20f762769a9f79b4b8747b4d8f2a19d310"
+        },
+        {
+          "kind": "log",
+          "path": "gpu/rel4/nvidia-open-sim.txt",
+          "sha256": "79799055196d30874591c50aecfbf6e986e13b3bc9dd66f1918744bb90339f5f"
+        },
+        {
+          "kind": "log",
+          "path": "gpu/rel4/baseline-no-helpers.log",
+          "sha256": "a72756d9361ececaca1d6c5058a884a04295497acd990b7b5eb2fb70aa408300"
+        },
+        {
+          "kind": "log",
+          "path": "gpu/rel4/repo-add.log",
+          "sha256": "1642edf7c0e4fa6ad19ff400ac4f4eabdbc9dcfa5f9046777857ac51f82a5bc9"
+        },
+        {
+          "kind": "log",
+          "path": "gpu/rel3/guest-lspci-before.log",
+          "sha256": "a4ef633b872f38ff1c2e273ba4d2e102af57beccf04453882bcbdab72a7c57d1"
+        },
+        {
+          "kind": "log",
+          "path": "gpu/rel3/gpu-detect.log",
+          "sha256": "d598fd59c165ec880323592ed8b301deec6f30501bae75e8a4e735ef6ba912e9"
+        },
+        {
+          "kind": "log",
+          "path": "gpu/rel3/gpu-install.log",
+          "sha256": "f7a1aafd06f0ccc47adbbc74183c831ed9c32396d05b22d8655b136ec738b3e1"
+        }
+      ],
+      "notes": "NVIDIA new-generation driver workflow validated on 81a90678. Physical-hardware half (rel3 VFIO passthrough of the founder RTX 5060 Ti): guest saw the GB206 card (10de:2d04), cuda-keyring 1.1-1 sha-verified, nvidia-driver-assistant --distro debian:13 recommended the nvidia-open 610 branch, Phoenix pre-snapshot created. That run exposed the release blocker: the recommended transaction removed the shipped nvidia-detect/nvidia-legacy-check/nvidia-installer-cleanup, which --no-remove correctly refused (surfaced as the set-u tmpdir crash, also fixed). Fix half (this ISO): helpers no longer shipped; apt-get -s install nvidia-open in the rel4 guest is REMOVAL-FREE (0 Remv, 52 Inst incl. nvidia-open + nvidia-kernel-open-dkms), so the --no-remove guard accepts and the flagship install proceeds. Full on-hardware DKMS+nvidia-smi re-run intentionally skipped per founder decision (the card has the VFIO reset bug requiring a host reboot); transaction-plan + card-visibility evidence stands in."
+    },
+    {
+      "id": "GPU-03",
+      "phase": "prepublish",
+      "area": "graphics",
+      "title": "AMD and Intel Mesa paths retain hardware rendering",
+      "required": false,
+      "status": "blocked",
+      "evidence": [
+        {
+          "kind": "report",
+          "path": "release/mesa-stack-213-vs-214.txt",
+          "sha256": "078a3e75a7d742794be7161cc8e84c0feddca81a3abc6c89549ffca91d454e8c"
+        }
+      ],
+      "notes": "FOUNDER DECISION 2026-08-09: skip the physical AMD run and trust the Mesa path from previous editions; no Intel hardware exists. Sourced basis: dpkg extraction from both ISOs shows the Mesa/libdrm/Vulkan-loader stack version-identical between 2.1.3 and 2.1.4 (see evidence); only graphics-adjacent deltas are the retired llama.cpp Vulkan backend (sanctioned 2.1.4 removal) and glx-alternative-mesa (NVIDIA-workflow rework). Physical AMD (5700G iGPU, currently BIOS-disabled) and Intel runs are roadmap-labeled for the next release. Case demoted to non-required per founder scope ruling."
+    },
+    {
+      "id": "RECOVERY-01",
+      "phase": "prepublish",
+      "area": "recovery",
+      "title": "Interrupted and removal-seeking updates recover through Phoenix snapshots",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "upgrade/rel4-direct-from-2.1.3/rejection-plan.log",
+          "sha256": "da3cf3a2917d8580d08873e68d1517d9427571936a9657163b3478f4cee18449"
+        },
+        {
+          "kind": "log",
+          "path": "upgrade/rel4-direct-from-2.1.3/interruption-recovery.log",
+          "sha256": "10cb2a9d853052c9ad91233582bf13433ccdbbc82cdf70bdbcde5f1cec737b58"
+        },
+        {
+          "kind": "log",
+          "path": "upgrade/rel4-direct-from-2.1.3/snapper-after.log",
+          "sha256": "f8b6c79e4bf9628db3def94f3d1b2556ec82dbe6ae41510272e4f43d1dbf28fd"
+        },
+        {
+          "kind": "screenshot",
+          "path": "reboot/rel4-bios-encrypted/grub-snapshots-menu.png",
+          "sha256": "bc4244c545b27b1f74a83abce3426e8f41f230fb7192005ef0244292a090d610"
+        },
+        {
+          "kind": "screenshot",
+          "path": "reboot/rel4-uefi-encrypted/grub-snapshots-menu.png",
+          "sha256": "3238ed722aa7e99e0cb2766852e3ac4d261eb630f28c16d5a723e5c7915f691a"
+        },
+        {
+          "kind": "log",
+          "path": "reboot/rel4-bios-encrypted/grub-snapshot-boot.log",
+          "sha256": "9d29f6e3370bb524425da9be5ebd609aad3a668c286d11ef8ff06f19b47f4cf7"
+        },
+        {
+          "kind": "log",
+          "path": "reboot/rel4-uefi-encrypted/grub-snapshot-boot.log",
+          "sha256": "3304de78bf97dc06e61a24f51f58d2f0ccbc765a90ecbb1da57a25379ab11be8"
+        }
+      ],
+      "notes": "Removal-seeking plan refused at every probe point (rc=100 sim+apply) on the upgraded 81a90678 system; interrupted shadowfetch-update (SIGKILL mid-unpack) detected+refused the damaged DB, prescribed repair converged, re-run completed rc=0 with Phoenix pre/post pair in snapper and health 9/0/0 (REL4_INTERRUPTION_RECOVERY_PASS); pre-update Btrfs snapshots boot from the grub-btrfs submenu on BOTH firmware types with ro-overlay verification (BIOS GRUB capture letterboxed 1024x768->1280x800 with provenance log, native preserved). Known parity-gap on the recovered path disclosed in-log."
+    },
+    {
+      "id": "STRESS-01",
+      "phase": "prepublish",
+      "area": "stress",
+      "title": "Sustained CPU, memory, disk, network, model and Buzz load leaves a healthy system",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "stress/rel4-uefi-encrypted/stress.log",
+          "sha256": "12ec2e23c7b62f811fc72c937ce2fa27cc5fbe31ce586d6376fe766108d51624"
+        },
+        {
+          "kind": "log",
+          "path": "stress/rel4-uefi-encrypted/post-high-memory.log",
+          "sha256": "768cba81108328a32bc927e6461a4473b96092e2029387a497df1fdc6c9c582f"
+        },
+        {
+          "kind": "log",
+          "path": "stress/rel4-uefi-encrypted/stress-inference-loop.log",
+          "sha256": "b9b80e97ee9ee1f87f344fc72c58412308e68c7a9eeba594750590e4938de080"
+        },
+        {
+          "kind": "screenshot",
+          "path": "stress/rel4-uefi-encrypted/cpu-load-desktop.png",
+          "sha256": "b456a830f29f907a3ba76a80b5ae7be8d1a19adbd85b896312c60fa0ad6a5b75"
+        }
+      ],
+      "notes": "UEFI-encrypted installed system: full A32 stress (CPU/mem/mixed-encrypted-IO/fork+socket/net/APT phases) PASS with stress_failures=0; post high-memory (4x1536M,180s) audit PASS. Concurrent Buzz gemma inference under load: attempt-1 full run 4/4 UMBRA_AI_OK; attempt-2 iters 5-6 OK. DISCLOSURES: (1) attempt-1 gate tripped on a stale pre-stress failed unit (drkonqi-coredump-processor timeout after plasmashell SIGBUS at 10:25, ~30min BEFORE stress; reset-failed then clean rerun; attempt-1 log kept as stress-attempt1-stale-drkonqi-unit.log). (2) During attempt-2 memory phase the Buzz app (9.5G RSS after ~48 requests) was SIGKILLed (no kernel-OOM/oomd/earlyoom log lines; killer unattributed); relaunched via systemd-run, model serving resumed in 20s, iters 9-10 PASS incl. after high-memory phase. OS itself never faulted: zero btrfs/kernel/OOM events all runs."
+    },
+    {
+      "id": "STRESS-02",
+      "phase": "prepublish",
+      "area": "stress",
+      "title": "Repeated shutdown and reboot cycle completes without filesystem or service failures",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "reboot/rel4-bios-encrypted/reboot-cycles.log",
+          "sha256": "03a61afe5eb7849897191ff84863bea3b8e860779d3972bccd103b3d7ad9edcd"
+        },
+        {
+          "kind": "log",
+          "path": "reboot/rel4-uefi-encrypted/reboot-cycles.log",
+          "sha256": "b9baa38c30c161d08749e2f9361633210d07532e87099b0e47667f1e86414d21"
+        },
+        {
+          "kind": "screenshot",
+          "path": "reboot/rel4-bios-encrypted/cycle-1-luks-masked.png",
+          "sha256": "91e5a029cf45c8add2651443fe866851602232254cad6aae1f7b5c705efc5af0"
+        },
+        {
+          "kind": "screenshot",
+          "path": "reboot/rel4-bios-encrypted/cycle-1-login.png",
+          "sha256": "3084885ab899b1e2532b84ee6d8d287da798030303a7a97f7707f3e72b903757"
+        },
+        {
+          "kind": "screenshot",
+          "path": "reboot/rel4-uefi-encrypted/cycle-1-luks-masked.png",
+          "sha256": "91e5a029cf45c8add2651443fe866851602232254cad6aae1f7b5c705efc5af0"
+        },
+        {
+          "kind": "screenshot",
+          "path": "reboot/rel4-uefi-encrypted/cycle-1-login.png",
+          "sha256": "02c566ff07c0410ba3027a32e5a4318010cd5835387f6c523cad228f9eef3cf5"
+        }
+      ],
+      "notes": "Three clean reboot cycles on BOTH firmware types of the encrypted installed system: BIOS lane A32_BIOS_THREE_REBOOT_CYCLES_PASS and UEFI lane A32_UEFI_THREE_REBOOT_CYCLES_PASS, reboot_cycle_failures=0 each. Every cycle: boot_id changed, LUKS prompt detected+unlocked (masked-input PNG), SSH recovered, system running with zero failed units, cryptsetup mapper active, correct firmware, health quick JSON fail=0, greeter PNG. UEFI lane used lane-local reboot-cycles copy whose only change is typing the disk passphrase (distinct from the login password on this lane) at the LUKS prompt."
+    },
+    {
+      "id": "UX-01",
+      "phase": "prepublish",
+      "area": "experience",
+      "title": "Keyboard navigation, scaling, resolutions and error recovery pass",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "ux/final/ux-01-summary.log",
+          "sha256": "5dc765492ca86ef4ee8ceaa38eed88ce8e0edfd7b529c55be2dbc658b99db4f5"
+        },
+        {
+          "kind": "log",
+          "path": "ux/final/atspi-buzz.log",
+          "sha256": "823a4402a849c4ff360d305f4f023a5d263b61522e73ca7c5c2b804d88494c65"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux-buzz-tab1.png",
+          "sha256": "dc6fc538f88040f41a3f350e2864c2e1c7baa7cc8cd486f58a7a9fdb60384bce"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux-buzz-tab2.png",
+          "sha256": "7316f27710453dd5180b280c418a8399f19c04ff19ccf12c94837aed201376d7"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux-buzz-tab3.png",
+          "sha256": "07e80f9aecf4b2fda738fbaabc5a212aeef2ab44311a33f5a2af30806fed5fc9"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux-scale-125.png",
+          "sha256": "97345e3dcbd2e6c948b84512b778bcb0ba8bdba35761d363ee47dc3b847d7805"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux-scale-restore.png",
+          "sha256": "4ba017626267347ebe4ce84b30249903aa0eb033ba53e43063d0163973b0b925"
+        }
+      ],
+      "notes": "Keyboard traversal (welcome + Buzz, 3+ visible focus stops), AT-SPI named accessible tree for buzz-desktop, resolution switch + 1.25 display scaling with clean restore, LUKS/SDDM wrong-credential errors with successful retry (L4 BIOS lane PNGs + wrong-cred-checks.log), Buzz invalid-invite readable error, setup cancellation clean exit. Full element->artifact map in ux-01-summary.log; remaining artifacts referenced there."
+    },
+    {
+      "id": "UX-02",
+      "phase": "prepublish",
+      "area": "experience",
+      "title": "Fresh final screenshots pass visual QA without overlap or stale branding",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "ux/final/visual-qa.log",
+          "sha256": "fab68129899cede4767b2f5813a946a4f03c1465137ea1cf15702917ea54c3c2"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux02-launcher.png",
+          "sha256": "045582fb6b46a4f2a7302b6278838a4640c9eead11b1dd190bc2ad30ad814230"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux02-local-ai-menu.png",
+          "sha256": "b75a459ca04a13b9845f52b0f8010c31118eede87d7e026f29b379b5eaea3600"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux02-launcher-post-buzz.png",
+          "sha256": "b75a459ca04a13b9845f52b0f8010c31118eede87d7e026f29b379b5eaea3600"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux02-control-center.png",
+          "sha256": "96435379dd4c4516519308f207dbd628e7acea63cf0c954febe46f18856290ef"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux02-welcome.png",
+          "sha256": "a662ebbe62911d7ebba19a4834f60e18cee2a90d0c8ddc1a458b56d2964d095a"
+        },
+        {
+          "kind": "screenshot",
+          "path": "ux/final/ux02-buzz-main.png",
+          "sha256": "3e5aac153a7873e2b87c4d6cdce666bfd38f2c5182d17f04590389d0e2c31675"
+        }
+      ],
+      "notes": "Fresh final-ISO screenshot set on installed UEFI-encrypted system: seven-section Fire launcher with single 'Local AI' section and no Lost & Found; Local AI submenu; launcher clean after consented Buzz install (single Buzz entry - NoDisplay override verified on disk via QGA, stale shadowfetch-ai.menu absent, only shadowfetch-launcher.menu merged); Control Center 2.1.4; Welcome 'Fire Edition 2.1.4 | Umbra'; Buzz main window. OCR QA: no '2.1.3'/'OpenClaw'/'Hermes'/'Ollama' in any of 10 images; reused live/installer/first-login/model-ready shots referenced in visual-qa.log. No reference image used."
+    },
+    {
+      "id": "REL-01",
+      "phase": "prepublish",
+      "area": "release",
+      "title": "Release dossier, package inventory, SBOM and evidence bundle verify",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "release/dossier-2.1.4.md",
+          "sha256": "17d8091d622a229d0352ec1971cf4791bd7b334115d48854495c0e60105f22c5"
+        },
+        {
+          "kind": "log",
+          "path": "release/packages-2.1.4.manifest",
+          "sha256": "196ca254c31a44e3d97bac69fded2315fcf32f3a8711d5d7b4ade1e1ec4a2ed2"
+        },
+        {
+          "kind": "log",
+          "path": "release/sbom-2.1.4.json",
+          "sha256": "04440046e49989ac8139c28ef91bd0e34d75ed8565f3944010193827a8c78b77"
+        },
+        {
+          "kind": "log",
+          "path": "release/sbom-sources-2.1.4.txt",
+          "sha256": "4259da5092b116e7523ba23002a5a662f5ee5a11c9b32f9319f23ba72a5a03e1"
+        },
+        {
+          "kind": "log",
+          "path": "release/evidence-bundle.sha256",
+          "sha256": "530218197391afd24c153b9765d5141a8bf23572c53b8ff3a0441cf66c3eb09a"
+        },
+        {
+          "kind": "log",
+          "path": "release/pre-release-check.log",
+          "sha256": "aeb1153ffe9d6399036fd64debd11373dfc78928350c6119963c4dd7300442f7"
+        },
+        {
+          "kind": "log",
+          "path": "release/mesa-stack-213-vs-214.txt",
+          "sha256": "078a3e75a7d742794be7161cc8e84c0feddca81a3abc6c89549ffca91d454e8c"
+        }
+      ],
+      "notes": "Release dossier (3-candidate history, claims-to-evidence index, standing findings disclosed), reprepro package manifest, SBOM from the 81a90678 squashfs + source list, evidence bundle tar with artifact block populated, pre-release-check green. Rebuilt after the final ISO-01/RECOVERY-01 re-records so the bundle contains the manifest-final evidence tree."
+    },
+    {
+      "id": "WEB-01",
+      "phase": "prepublish",
+      "area": "website",
+      "title": "Staged website preserves current edits and includes the approved Buzz hero and navigation link",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "web/staged/web-staged-before.log",
+          "sha256": "f4d974b4efd9a29ae199f23bfc989ed9ad14627ff8798a214e2107f289027ff2"
+        },
+        {
+          "kind": "log",
+          "path": "web/staged/web-staged-after.log",
+          "sha256": "56bf41df42dea611e237953e95b993ea7fe4cc17710b3ee684bc6033a2d461a5"
+        },
+        {
+          "kind": "log",
+          "path": "web/staged/web-staged-checks.log",
+          "sha256": "81c506e6969139ec216f1ccb4c804e3c83490f8043fc1598421c1a35debce686"
+        },
+        {
+          "kind": "screenshot",
+          "path": "web/staged/staged-linux-desktop.png",
+          "sha256": "e73fe64edb8eb1f1deaa23ea850633672df2d0c5f6c79f27ff6cea357ed8d32a"
+        },
+        {
+          "kind": "screenshot",
+          "path": "web/staged/staged-linux-mobile.png",
+          "sha256": "f08bbfb7ed4f7e0f28999376d78618537070fd42c2213d24453366c19446db1f"
+        },
+        {
+          "kind": "screenshot",
+          "path": "web/staged/staged-nav-desktop.png",
+          "sha256": "1c0332b1a921398bb3835a05822e36dccdebd7ac0766289044722fdb98e50b69"
+        }
+      ],
+      "notes": "Staged only; public site untouched (no deploy, no wrangler, no git push; preview stopped). Approved Buzz hero sha256 415a3133b01128546da39f5eb131b1c828eb7ced79d131f0b20f3b98bd12bd99 verified byte-identical in the release asset, public/linux-assets/ and built dist/linux-assets/. Buzz top-nav item per reference mock (last link, existing style) on all 317 built pages with exact href https://github.com/block/buzz target=_blank rel=noopener-noreferrer; neutral wording, no affiliation claims. Prior dirty edits preserved: before/after git porcelain identical except the one added hero asset; HEAD 33e40a1 unchanged (survey said 4d93ded; actual baseline is 33e40a1); stash empty. Additions left uncommitted as the staged state. Supporting diffstat in web-staged-diffstat.log."
+    },
+    {
+      "id": "PUB-01",
+      "phase": "postpublish",
+      "area": "publication",
+      "title": "GitHub, Shadowfetch website and Archive.org expose the approved 2.1.4 release",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "publication/pub01-three-surfaces.log",
+          "sha256": "24194d7d2e7e93586be45b999f9ab0e0bb70c465ae918068f02a3c82b8822d9e"
+        }
+      ],
+      "notes": "Release visible on all three surfaces: GitHub release v2.1.4 (Realbobcorbin/shadowfetch-linux) with SHA256SUMS/.asc/.torrent/manifest assets; shadowfetch.com/linux presenting 2.1.4 (hero, download, verify, changelog #v2-1-4, releases feed); Archive.org item shadowfetch-linux-2-1-4 derived and serving the ISO/.asc/.sha256/.torrent/SHA256SUMS. All three independently reachable."
+    },
+    {
+      "id": "PUB-02",
+      "phase": "postpublish",
+      "area": "publication",
+      "title": "Fresh public downloads, checksum, signature, metadata and rollback URLs verify",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "publication/pub02-public-verify.log",
+          "sha256": "873809a775210d3f4089fb934b54e544c289b3ff862f9d666eed301ff1778851"
+        }
+      ],
+      "notes": "Fresh public downloads from a clean dir: full shadowfetch-2.1.4-amd64.iso re-download (3,968,475,136 bytes) sha256-verified against the public .sha256 (81a90678); detached .asc verifies using only the publicly served /linux/shadowfetch.gpg.asc key (8F13CE15); apt InRelease fresh (Valid-Until +14d) and signature good; shadowfetch-defaults resolves 2.1.4-1 in the public repo with a pool .deb serving 200; rollback URL shadowfetch-2.1.3-amd64.iso still serves 200. Archive.org mirror upload in progress separately."
+    },
+    {
+      "id": "PUB-03",
+      "phase": "postpublish",
+      "area": "publication",
+      "title": "Public Linux page displays the approved 2.1.4 Buzz hero",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "publication/site/hero-sha256-proof.txt",
+          "sha256": "2b02953fb9ed80917819b117d696bd91fc13f88a6f4385842c6eaa4d62fed86f"
+        },
+        {
+          "kind": "log",
+          "path": "publication/site/release-cycle-dry-run.log",
+          "sha256": "e3a99ad5a60e17591c2ba26282c136c1de69483e7d79e79733c71a9a911776c2"
+        },
+        {
+          "kind": "log",
+          "path": "publication/site/release-cycle-execute.log",
+          "sha256": "cefe90dda774ffffc2abb35b32729801bbc609ecf5b5ca12141262d6246bb231"
+        }
+      ],
+      "notes": "Public /linux page serves the approved 2.1.4 Buzz hero: asset sha256 415a3133 verified three ways (release asset, canonical tree, live-served bytes); band live-verified post zone-purge and re-confirmed after the newsroom follow-on release; desktop + mobile layouts captured in site evidence."
+    },
+    {
+      "id": "PUB-04",
+      "phase": "postpublish",
+      "area": "publication",
+      "title": "Public top navigation exposes Buzz and opens the official Block repository",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "publication/site/release-cycle-dry-run.log",
+          "sha256": "e3a99ad5a60e17591c2ba26282c136c1de69483e7d79e79733c71a9a911776c2"
+        },
+        {
+          "kind": "log",
+          "path": "publication/site/release-cycle-execute.log",
+          "sha256": "cefe90dda774ffffc2abb35b32729801bbc609ecf5b5ca12141262d6246bb231"
+        }
+      ],
+      "notes": "Public top navigation exposes Buzz as a plain mono link with href exactly https://github.com/block/buzz and target=_blank rel=noopener-noreferrer in the served HTML; verified live from both the build box and an independent off-site client."
+    }
+  ]
+}

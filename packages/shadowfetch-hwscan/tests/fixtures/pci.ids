@@ -1,0 +1,18 @@
+# Miniature pci.ids fixture for the shadowfetch-hwscan unit tests.
+# Format matches /usr/share/misc/pci.ids: vendor lines, tab-indented
+# device lines, double-tab subsystem lines, then the class list.
+
+1002  Advanced Micro Devices, Inc. [AMD/ATI]
+	73df  Navi 22 [Radeon RX 6700/6700 XT/6750 XT / 6800M/6850M XT]
+		1002 0e3a  Radeon RX 6700 XT
+10de  NVIDIA Corporation
+	2504  GA106 [GeForce RTX 3060 Lite Hash Rate]
+1af4  Red Hat, Inc.
+	1050  Virtio 1.0 GPU
+8086  Intel Corporation
+	46a6  Alder Lake-P GT2 [Iris Xe Graphics]
+
+C 03  Display controller
+	00  VGA compatible controller
+	02  3D controller
+	80  Display controller

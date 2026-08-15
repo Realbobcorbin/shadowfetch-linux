@@ -1,0 +1,16 @@
+# Shadowfetch 1.6.0 — media-friendly natives (Qt6/KF6 only)
+# 2.1.2 Fire: moved to the Welcome one-click catalog (founder decision) -- haruna
+# 2.1.2 Fire: moved to the Welcome one-click catalog (founder decision) -- elisa
+# 2.1.2 Fire: moved to the Welcome one-click catalog (founder decision) -- kasts
+kde-spectacle
+# 2.1.2 Fire: moved to the Welcome one-click catalog (founder decision) -- mkvtoolnix-gui
+mpv-mpris
+plasma-browser-integration
+kio-audiocd
+# 2.1.2 Fire: moved to the Welcome one-click catalog (founder decision) -- kid3
+vainfo
+mediainfo-gui
+
+# 2.1.2: the founder's default set names OBS Studio for recording and
+# streaming, and the image had never actually declared it.
+obs-studio

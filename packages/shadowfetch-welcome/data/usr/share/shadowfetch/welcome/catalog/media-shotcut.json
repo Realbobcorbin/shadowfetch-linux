@@ -1,0 +1,14 @@
+{
+  "id": "media-shotcut",
+  "name": "Shotcut",
+  "kind": "apt",
+  "packages": ["shotcut"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 2500000,
+  "license": "GPL-3.0 (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "media",
+  "blurb": "Cross-platform video editor with wide format support, filters and timeline editing."
+}

@@ -1,0 +1,14 @@
+{
+  "id": "media-kdenlive",
+  "name": "Kdenlive",
+  "kind": "apt",
+  "packages": ["kdenlive"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": null,
+  "license": "GPL-3.0+ (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "media",
+  "blurb": "KDE's multi-track video editor - proxies, effects, titling and a full editing workflow."
+}

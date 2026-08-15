@@ -1,0 +1,34 @@
+Source: shadowfetch-phoenix
+Section: admin
+Priority: optional
+Maintainer: Shadowfetch Project <signing@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://shadowfetch.com/linux/
+
+Package: shadowfetch-phoenix
+Architecture: all
+Depends:
+ ${misc:Depends},
+ btrfs-progs,
+ coreutils (>= 9.5),
+ snapper,
+ pkexec,
+ polkitd
+Recommends:
+ grub-btrfs,
+ libnotify-bin,
+ smartmontools,
+ inxi
+Description: Shadowfetch Phoenix Recovery (safety pillar)
+ Phoenix Recovery for Shadowfetch Linux 2.1.2 "Fire Edition". On a Btrfs
+ root it arms snapper at first boot (so Debian snapper's shipped 80snapper
+ apt hook wraps every dpkg run in pre/post Phoenix Points), keeps free
+ space ahead of package transactions (79phoenix-space, sorted before
+ 80snapper), and restores any Point crash-atomically: snapshot-aside, then
+ a single renameat2(RENAME_EXCHANGE) swap, so an @ subvolume exists at
+ every instant and a power cut can never leave the machine unbootable.
+ Restore is supported from inside the "Last Known Good Flame" read-only
+ snapshot session. Also ships the user-scope Plasma desktop reset (personal
+ files untouched, undoable by construction) and the privacy-safe recovery
+ report exporter. Nothing here makes a network connection.

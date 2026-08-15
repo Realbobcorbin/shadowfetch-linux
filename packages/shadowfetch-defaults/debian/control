@@ -1,0 +1,43 @@
+Source: shadowfetch-defaults
+Section: misc
+Priority: optional
+Maintainer: Shadowfetch Project <maintainers@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://shadowfetch.com/linux/
+
+Package: shadowfetch-defaults
+Architecture: all
+Depends:
+ ${misc:Depends},
+ ca-certificates,
+ curl,
+ fastfetch,
+ iproute2,
+ konsole,
+ libnotify-bin,
+ pciutils,
+ pkexec,
+ polkitd,
+ podman,
+ podman-compose,
+ psmisc,
+ python3,
+ python3-pyqt6,
+ sudo,
+ vulkan-tools,
+ wl-clipboard,
+ xclip,
+ xdg-utils
+Recommends:
+ shadowfetch-themes,
+ shadowfetch-branding,
+ papirus-icon-theme,
+ snapper,
+ grub-btrfs
+Description: Shadowfetch default user configuration
+ Ships the Shadowfetch defaults applied to new user accounts (via
+ /etc/skel): kdeglobals, kwinrc, konsole profile, fastfetch config.
+ Also ships a system-wide /etc/profile.d snippet that prints a
+ fastfetch banner on the first interactive shell, plus the Shadowfetch
+ Control Center, safe updater, health diagnostics and local AI workspace tools.

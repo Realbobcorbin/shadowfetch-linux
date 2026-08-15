@@ -1,0 +1,41 @@
+Source: shadowfetch-control-center
+Section: x11
+Priority: optional
+Maintainer: Shadowfetch Project <signing@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13), dh-python, python3
+Standards-Version: 4.6.2
+Homepage: https://shadowfetch.com/linux/
+
+Package: shadowfetch-control-center
+Architecture: all
+Depends:
+ ${misc:Depends},
+ python3,
+ python3-pyqt6,
+ python3-dbus
+Recommends:
+ shadowfetch-ember,
+ shadowfetch-firewatchd,
+ shadowfetch-phoenix,
+ shadowfetch-welcome,
+ snapper,
+ gamemode,
+ polkitd,
+ pkexec,
+ konsole
+Replaces: shadowfetch-defaults (<< 2.1.2-1~)
+Breaks: shadowfetch-defaults (<< 2.1.2-1~)
+Description: Shadowfetch Control Center - six-section shell and Fire pages
+ The 2.1.2 "Fire Edition" Control Center: one window with six fixed
+ sections - Ignite (Ember Mode), Watch (Firewatch), Recover (Phoenix),
+ Agents, Drivers, and Software & Updates. Supports deep links
+ (--page section[:tab]) with single-instance routing over the session
+ bus, so Welcome, Firewatch, Phoenix and Fireproof all land in the same
+ window.
+ .
+ Takes over /usr/bin/shadowfetch-control from shadowfetch-defaults; the
+ 2.1.1 tools (Safe Update, System Health, Agent Studio, Agent Tools,
+ First-run Setup, Graphics & Recovery) remain reachable inside their
+ sections. All privileged actions go through systemd/polkit or pkexec
+ helpers shipped by the pillar packages; the UI owns no root logic and
+ makes no network connections.

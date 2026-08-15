@@ -1,0 +1,90 @@
+#!/bin/sh
+# Shadowfetch Linux — live-build configuration
+# This is the main config script live-build runs to set up the build.
+
+set -e
+
+lb config noauto \
+    --mode debian \
+    --initsystem systemd \
+    --distribution testing \
+    `# 2.1.2: chroot and bootstrap pinned to a snapshot so a rebuild reproduces` \
+    `# the same package set. "testing" moves daily -- rebuilding 2.1.1 today does` \
+    `# not give 2.1.1, and forky has already dropped network-manager-gnome, which` \
+    `# this list declares, so an unpinned build now simply aborts.` \
+    `#` \
+    `# It MUST be the --parent-mirror-* pair. In --mode debian, live-build writes` \
+    `# the chroot sources.list from LB_PARENT_MIRROR_CHROOT (lb_chroot_archives:72).` \
+    `# The non-parent LB_MIRROR_* pair only feeds sources.list.d/<mode>.list for a` \
+    `# derivative distribution, which this build has none of -- set on its own it` \
+    `# is recorded in config/bootstrap and then never read. Both are set below so` \
+    `# the two cannot drift apart.` \
+    `# http, not https, and deliberately: at chroot_archives time the chroot is a` \
+    `# bare debootstrap with no ca-certificates, so https fails cert verification` \
+    `# and apt falls back to stale indices *without* failing the build. apt`  \
+    `# authenticates by GPG signature on the Release file, not by transport, so` \
+    `# http costs no integrity -- and deb.debian.org below is already http.` \
+    --parent-mirror-chroot "http://snapshot.debian.org/archive/debian/20260726T000000Z/" \
+    --mirror-chroot "http://snapshot.debian.org/archive/debian/20260726T000000Z/" \
+    `# testing-updates is written from a THIRD variable and was still live. It is` \
+    `# empty today (main Packages.gz is 300 bytes) so this closes an unpinned` \
+    `# surface rather than fixing a breakage -- but a pin that covers one of the` \
+    `# two sources.list lines is not a pin.` \
+    --parent-mirror-chroot-volatile "http://snapshot.debian.org/archive/debian/20260726T000000Z/" \
+    --mirror-chroot-volatile "http://snapshot.debian.org/archive/debian/20260726T000000Z/" \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --debian-installer false \
+    --debian-installer-gui false \
+    --architectures amd64 \
+    --linux-flavours amd64 \
+    --binary-images iso \
+    --compression xz \
+    --iso-application "Shadowfetch Linux" \
+    --iso-publisher "Shadowfetch Project" \
+    --iso-volume "SHADOWFETCH" \
+    --bootappend-live "boot=live components username=shadow hostname=shadowfetch quiet splash" \
+    --bootloader grub2 \
+    --memtest none \
+    --win32-loader false \
+    --apt-recommends true \
+    `# Snapshot builds cannot refresh apt-file indices after Release expiry;` \
+    `# disabling generic apt indices avoids apt-file update in lb_chroot_hooks.` \
+    --apt-indices false \
+    --apt-source-archives false \
+    --backports false \
+    --security false \
+    --parent-mirror-bootstrap "http://snapshot.debian.org/archive/debian/20260726T000000Z/" \
+    --mirror-bootstrap "http://snapshot.debian.org/archive/debian/20260726T000000Z/" \
+    `# Binary mirrors stay live on purpose: lb_chroot_archives:625 only rewrites` \
+    `# the shipped sources.list when the chroot and binary mirrors differ, so this` \
+    `# inequality is what gives a frozen build and an installed system that still` \
+    `# receives updates. Set explicitly rather than left to the default.` \
+    --parent-mirror-binary "http://deb.debian.org/debian/" \
+    --mirror-binary "http://deb.debian.org/debian/" \
+    --firmware-chroot true \
+    --firmware-binary true \
+    "${@}"
+
+# ---------------------------------------------------------------------------
+# 2.1.2 NOTE, kept here on purpose.
+#
+# The snapshot pin above needs one companion setting that cannot be passed to
+# `lb config`:
+#
+#     config/common:  APT_OPTIONS="--yes -o Acquire::Check-Valid-Until=false"
+#
+# Snapshot Release files carry a Valid-Until (this snapshot expires 2026-08-01)
+# and an expired Release is a hard apt failure, so the check has to be relaxed
+# for the build.
+#
+# It must NOT be moved to config/chroot_apt/apt.conf. That file is copied into
+# the chroot by lb_binary and ends up inside the squashfs, which would ship a
+# build-time workaround onto every user's installed system -- permanently
+# disabling an integrity check on their machine to solve a problem we have on
+# ours.
+#
+# This note is here rather than in config/common because `lb config` regenerates
+# config/common from a template: it carries variable values forward but strips
+# added comments. Verified 2026-07-30 -- the original comment was deleted by the
+# first config run while the value survived.
+# ---------------------------------------------------------------------------

@@ -1,0 +1,8 @@
+// Shadowfetch Phoenix Recovery 2.1.2 "Fire Edition".
+// Free-space guard, deliberately numbered 79 so it sorts BEFORE snapper's
+// shipped 80snapper: space is reclaimed (snapper number-cleanup + stale
+// @_prev GC) before the pre-transaction Phoenix Point is taken, so a big
+// dist-upgrade cannot ENOSPC mid-dpkg between snapper-cleanup timer runs.
+// The hook never blocks the transaction: the script always exits 0 and the
+// invocation is belt-and-braces guarded with || true.
+DPkg::Pre-Invoke { "/usr/libexec/phoenix-space-check || true"; };

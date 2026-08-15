@@ -1,0 +1,32 @@
+#!/bin/sh
+# grub-btrfs-overlay (hook) - ship the overlay-boot pieces in the initrd.
+# Part of the in-house grub-btrfs 4.14-2 package, Shadowfetch Linux 2.1.2
+# "Fire Edition". Ported from Kali's grub-btrfs "Unkaputtbar" packaging.
+#
+# Build-time half of the read-only-snapshot boot: makes sure the overlay and
+# btrfs kernel modules are inside the initrd so the local-bottom script
+# (scripts/local-bottom/grub-btrfs-overlay) can lift a "Last Known Good
+# Flame" menu entry into a tmpfs-backed writable session.
+
+PREREQ=""
+
+prereqs() {
+    echo "$PREREQ"
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# The overlay module is the whole mechanism; btrfs is normally pulled in by
+# the root-filesystem detection already, but a snapshot boot must never
+# depend on that heuristic having fired.
+manual_add_modules overlay
+manual_add_modules btrfs
+
+exit 0

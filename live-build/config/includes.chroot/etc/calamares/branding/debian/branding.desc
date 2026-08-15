@@ -1,0 +1,39 @@
+---
+componentName:   debian
+welcomeStyleCalamares: true
+welcomeExpandingLogo: false
+windowExpanding: normal
+windowSize: 800px,580px
+windowPlacement: center
+
+strings:
+    productName:         Shadowfetch Linux
+    shortProductName:    Shadowfetch
+    version:             2.0.1
+    shortVersion:        2.0.1
+    versionedName:       Shadowfetch Linux 2.0.1 (Umbra)
+    shortVersionedName:  Shadowfetch 2.0.1
+    bootloaderEntryName: Shadowfetch
+    productUrl:          https://shadowfetch.com/linux
+    supportUrl:          https://shadowfetch.com/linux/support
+    knownIssuesUrl:      https://shadowfetch.com/linux/issues
+    releaseNotesUrl:     https://shadowfetch.com/linux
+    donateUrl:           https://www.debian.org
+
+sidebar: widget
+navigation: widget
+
+images:
+    productLogo:         "debian-logo.png"
+    productIcon:         "debian-logo.png"
+    productWelcome:      "welcome.png"
+
+slideshow:               "show.qml"
+
+style:
+   SidebarBackground:    "#26475b"
+   SidebarText:          "#FFFFFF"
+   SidebarTextCurrent:   "#fbfbfb"
+   SidebarBackgroundCurrent: "#265370"
+
+slideshowAPI: 2

@@ -1,0 +1,71 @@
+#!/bin/bash
+# Record measured GPU readiness without silently changing drivers.
+set -e
+
+cat > /usr/local/sbin/shadowfetch-gpu-detect <<'EOF'
+#!/bin/bash
+set -u
+state=/var/lib/shadowfetch
+install -d -m 0755 "$state"
+gpu=$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true)
+printf '%s\n' "$gpu" > "$state/graphics-detected"
+rm -f "$state/gpu-ready" "$state/gpu-needs-setup" "$state/gpu-verify-failed"
+
+fail() {
+    printf 'status=failed\nchecked=%s\nreason=%s\n' "$(date -Is)" "$1" \
+        > "$state/graphics-verification"
+    touch "$state/gpu-needs-setup" "$state/gpu-verify-failed" "$state/gpu-detect-done"
+    exit 0
+}
+
+compgen -G '/dev/dri/renderD*' >/dev/null || fail "no DRM render node"
+command -v vulkaninfo >/dev/null 2>&1 || fail "vulkaninfo missing"
+summary=$(timeout 20s vulkaninfo --summary 2>/dev/null) || fail "Vulkan probe failed"
+printf '%s\n' "$summary" > "$state/graphics-vulkan-summary"
+hardware_devices=$(printf '%s\n' "$summary" \
+    | awk -F= '/deviceName/ {sub(/^[[:space:]]+/, "", $2); print $2}' \
+    | grep -Evi 'llvmpipe|lavapipe|softpipe|software rasterizer' || true)
+[[ -n "$hardware_devices" ]] || fail "software Vulkan renderer"
+
+if printf '%s\n' "$gpu" | grep -qi nvidia; then
+    command -v nvidia-smi >/dev/null 2>&1 || fail "nvidia-smi missing"
+    nvidia-smi -L >/dev/null 2>&1 || fail "NVIDIA kernel driver inactive"
+    lsmod | awk '{print $1}' | grep -Eq '^nvidia(_drm|_modeset|_uvm)?$' \
+        || fail "NVIDIA modules not loaded"
+    lsmod | awk '{print $1}' | grep -Fxq nouveau \
+        && fail "nouveau and NVIDIA both loaded"
+    printf '%s\n' "$summary" | grep -qi nvidia \
+        || fail "NVIDIA absent from Vulkan devices"
+elif printf '%s\n' "$gpu" | grep -Eqi 'AMD|ATI|Radeon'; then
+    printf '%s\n' "$summary" | grep -Eqi 'AMD|Radeon|RADV' \
+        || fail "AMD absent from Vulkan devices"
+elif printf '%s\n' "$gpu" | grep -qi intel; then
+    printf '%s\n' "$summary" | grep -Eqi 'Intel|ANV' \
+        || fail "Intel absent from Vulkan devices"
+else
+    fail "graphics vendor not identified"
+fi
+
+printf 'status=ready\nchecked=%s\n' "$(date -Is)" > "$state/graphics-verification"
+touch "$state/gpu-ready" "$state/gpu-detect-done"
+exit 0
+EOF
+chmod 0755 /usr/local/sbin/shadowfetch-gpu-detect
+
+cat > /etc/systemd/system/shadowfetch-gpu-detect.service <<'EOF'
+[Unit]
+Description=Measure Shadowfetch graphics driver readiness
+Documentation=https://www.shadowfetch.com/linux
+ConditionPathExists=!/run/live/medium
+ConditionPathExists=!/run/live/rootfs
+After=systemd-udev-settle.service display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/shadowfetch-gpu-detect
+
+[Install]
+WantedBy=graphical.target
+EOF
+
+systemctl enable shadowfetch-gpu-detect.service

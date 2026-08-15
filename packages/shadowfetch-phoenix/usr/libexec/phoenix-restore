@@ -1,0 +1,174 @@
+#!/bin/sh
+# phoenix-restore - make a Phoenix Point the permanent root, crash-atomically.
+# Part of Shadowfetch Linux 2.1.2 "Fire Edition". Run via pkexec
+# (polkit action org.shadowfetch.phoenix.restore).
+#
+# THE ONE RULE: at every instant an @ subvolume exists on the volume, so
+# GRUB's baked /@/boot/grub prefix survives a power cut at ANY point.
+# Therefore this is never "move @ aside, then copy": it is snapshot-aside,
+# then one atomic exchange:
+#
+#   1. mount the volume top-level (subvolid=5)
+#   2. btrfs subvolume snapshot  @snapshots/N/snapshot  -> @new   (rw copy)
+#   3. sync
+#   4. mv --exchange @new @        <- single atomic renameat2(RENAME_EXCHANGE)
+#   5. mv @new @_prev_<timestamp>  (the swapped-out old root, kept once)
+#   6. flag file -> phoenix-postboot runs update-grub on the next boot
+#
+# A crash after step 4 merely leaves @new (the old root) for phoenix-postboot
+# to rename/GC. A crash before step 4 leaves @ untouched.
+#
+# SUPPORTED FROM INSIDE THE OVERLAY SESSION ("Last Known Good Flame" boot):
+# when / is the tmpfs-overlay ride of a read-only Point, the snapshot ID is
+# preselected from /run/phoenix-overlay and all writes go to the real volume
+# mounted fresh from subvolid=5 - the tmpfs upper layer is irrelevant.
+
+set -u
+
+VERSION_FILE=/usr/share/shadowfetch/version
+
+usage() {
+    cat <<'SFHELP'
+phoenix-restore - restore a Phoenix Point as the permanent system root.
+
+USAGE
+  phoenix-restore <snapshot-number>   restore snapper snapshot N
+  phoenix-restore                     inside a "Last Known Good Flame"
+                                      overlay session: restore the Point
+                                      you are currently riding
+
+The swap is crash-atomic (snapshot-aside, then one renameat2 exchange);
+an @ subvolume exists at every instant. Personal data in @home, logs in
+@log and caches in @cache are separate subvolumes and are not touched.
+Reboot after a successful restore.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  --version)
+    echo "phoenix-restore (Shadowfetch Linux) $(cat "$VERSION_FILE" 2>/dev/null || echo unknown)"; exit 0 ;;
+esac
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "phoenix-restore: must run as root (use pkexec phoenix-restore)" >&2
+    exit 1
+fi
+
+SNAP="${1:-}"
+
+# --- Overlay-session detection ---------------------------------------------
+OVERLAY=0
+if [ -f /run/phoenix-overlay ] && [ "$(findmnt -n -o FSTYPE / 2>/dev/null)" = "overlay" ]; then
+    OVERLAY=1
+    # Marker written by the grub-btrfs-overlay initramfs script.
+    PHOENIX_SNAPSHOT= ; PHOENIX_ROOT_DEVICE=
+    . /run/phoenix-overlay
+    if [ -z "$SNAP" ] && [ -n "${PHOENIX_SNAPSHOT:-}" ]; then
+        SNAP="$PHOENIX_SNAPSHOT"
+        echo "phoenix-restore: overlay session detected - preselecting Point #$SNAP (the one you are riding)"
+    fi
+fi
+
+if [ -z "$SNAP" ]; then
+    usage >&2
+    exit 2
+fi
+case "$SNAP" in
+  *[!0-9]*|'') echo "phoenix-restore: snapshot number must be a positive integer, got '$SNAP'" >&2; exit 2 ;;
+esac
+
+# --- Find the real Btrfs device --------------------------------------------
+DEV=
+if [ "$OVERLAY" = 1 ] && [ -n "${PHOENIX_ROOT_DEVICE:-}" ] && [ -b "${PHOENIX_ROOT_DEVICE:-}" ]; then
+    DEV=$PHOENIX_ROOT_DEVICE
+fi
+if [ -z "$DEV" ]; then
+    if [ "$OVERLAY" = 1 ]; then
+        # Fallback: the snapshot's fstab still mounted the real @snapshots rw.
+        DEV=$(findmnt -n -o SOURCE /.snapshots 2>/dev/null || true)
+    else
+        if [ "$(findmnt -n -o FSTYPE / 2>/dev/null)" != "btrfs" ]; then
+            echo "phoenix-restore: / is not Btrfs - Phoenix Points require the Btrfs filesystem (chosen at install)" >&2
+            exit 1
+        fi
+        DEV=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+    fi
+fi
+DEV=${DEV%%\[*}          # findmnt reports /dev/xxx[/@] - strip the subvol part
+if [ -z "$DEV" ] || [ ! -b "$DEV" ]; then
+    echo "phoenix-restore: cannot determine the Btrfs root device" >&2
+    exit 1
+fi
+
+# --- Mount the volume top-level --------------------------------------------
+MNT=$(mktemp -d /run/phoenix-restore.XXXXXX)
+cleanup() {
+    if mountpoint -q "$MNT" 2>/dev/null; then
+        btrfs filesystem sync "$MNT" >/dev/null 2>&1 || true
+        umount "$MNT" 2>/dev/null || true
+    fi
+    rmdir "$MNT" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+if ! mount -t btrfs -o subvolid=5 "$DEV" "$MNT"; then
+    echo "phoenix-restore: cannot mount $DEV top-level (subvolid=5)" >&2
+    exit 1
+fi
+
+SRC="$MNT/@snapshots/$SNAP/snapshot"
+if [ ! -d "$MNT/@" ]; then
+    echo "phoenix-restore: no @ subvolume on $DEV - refusing (unexpected layout)" >&2
+    exit 1
+fi
+if ! btrfs subvolume show "$SRC" >/dev/null 2>&1; then
+    echo "phoenix-restore: Point #$SNAP has no snapshot at @snapshots/$SNAP/snapshot" >&2
+    exit 1
+fi
+
+TS=$(date +%Y%m%d%H%M%S)
+
+# A stale @new from an interrupted earlier run: park it, never delete blind
+# (if the crash was after the exchange, @new IS the previous root).
+if [ -d "$MNT/@new" ]; then
+    echo "phoenix-restore: parking leftover @new from an interrupted restore as @_prev_${TS}_recovered"
+    mv "$MNT/@new" "$MNT/@_prev_${TS}_recovered"
+fi
+
+# --- Snapshot-aside, sync, atomic exchange ---------------------------------
+echo "phoenix-restore: creating writable copy of Point #$SNAP as @new ..."
+if ! btrfs subvolume snapshot "$SRC" "$MNT/@new" >/dev/null; then
+    echo "phoenix-restore: snapshot of Point #$SNAP failed" >&2
+    exit 1
+fi
+
+sync
+btrfs filesystem sync "$MNT" >/dev/null 2>&1 || true
+
+echo "phoenix-restore: atomically exchanging @new and @ ..."
+if ! mv --exchange "$MNT/@new" "$MNT/@"; then
+    echo "phoenix-restore: atomic exchange failed - your current root is untouched" >&2
+    btrfs subvolume delete "$MNT/@new" >/dev/null 2>&1 || true
+    exit 1
+fi
+# From here on the restored Point IS @. The old root sits in @new.
+mv "$MNT/@new" "$MNT/@_prev_${TS}" 2>/dev/null || true
+
+# --- Flag: run update-grub on the next boot of the restored root -----------
+mkdir -p "$MNT/@/var/lib/shadowfetch"
+{
+    echo "restored=$SNAP"
+    echo "date=$TS"
+    echo "previous=@_prev_${TS}"
+} > "$MNT/@/var/lib/shadowfetch/phoenix-update-grub"
+
+btrfs filesystem sync "$MNT" >/dev/null 2>&1 || true
+
+echo ""
+echo "Phoenix Point #$SNAP is now the permanent system root."
+echo "The previous root is kept once as @_prev_${TS} (cleaned up automatically)."
+echo "Reboot to start using it. GRUB's menu is refreshed on that boot."
+exit 0

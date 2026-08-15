@@ -1,0 +1,14 @@
+{
+  "id": "media-elisa",
+  "name": "Elisa",
+  "kind": "apt",
+  "packages": ["elisa"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 1800000,
+  "license": "LGPL-3.0+ (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "media",
+  "blurb": "Simple, fast music player and library that fits the Plasma desktop."
+}

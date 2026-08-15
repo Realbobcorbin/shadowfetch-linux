@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# Ember is a switch, not a state: the unit must never be enabled and
+# never started at install time. It is started and stopped on demand by
+# the Control Center Ember switch (systemd StartUnit/StopUnit behind the
+# 50-shadowfetch-ember.rules polkit rule), and --no-stop-on-upgrade keeps
+# an armed Ember armed across a package upgrade instead of yanking the
+# user back to Balanced mid-session.
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start --no-stop-on-upgrade shadowfetch-ember.service

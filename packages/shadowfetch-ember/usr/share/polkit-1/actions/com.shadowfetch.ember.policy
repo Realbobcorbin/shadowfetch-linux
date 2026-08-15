@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+
+  <vendor>Shadowfetch Project</vendor>
+  <vendor_url>https://shadowfetch.com/linux/</vendor_url>
+
+  <!--
+    com.shadowfetch.ember.duration guards the pkexec ember-duration
+    helper: the single root-write path for the Ember time limit
+    (RuntimeMaxSec runtime drop-in) and the app-profile marker
+    (/run/shadowfetch/ember-profile).
+
+    allow_active is yes for the same reason the switch itself is
+    passwordless for the active console user: everything the helper
+    writes lives on tmpfs, is enforced or cleared by pid 1 and
+    ember-restore, and cannot outlive a reboot.  A time limit is a
+    SAFETY feature; putting a password between the user and "return to
+    Balanced after two hours" would push people toward unlimited Ember.
+  -->
+  <action id="com.shadowfetch.ember.duration">
+    <description>Set the Ember Mode time limit or app profile</description>
+    <message>Authentication is required to change the Ember Mode time limit</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/ember-duration</annotate>
+  </action>
+
+</policyconfig>

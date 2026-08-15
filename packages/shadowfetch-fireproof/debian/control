@@ -1,0 +1,42 @@
+Source: shadowfetch-fireproof
+Section: admin
+Priority: optional
+Maintainer: Shadowfetch Project <signing@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://shadowfetch.com/linux/
+
+Package: shadowfetch-fireproof
+Architecture: all
+Depends:
+ ${misc:Depends},
+ python3,
+ python3-apt,
+ python3-dbus,
+ python3-gi,
+ python3-pyqt6,
+ apt-listchanges,
+ needrestart,
+ dbus,
+ polkitd,
+ pkexec,
+ shadowfetch-phoenix
+Recommends:
+ snapper,
+ libnotify-bin
+Description: Shadowfetch Fireproof safe system updates
+ Fireproof is how Shadowfetch Linux updates itself. Opening the analyze
+ screen takes no apt lock and downloads nothing: the pending upgrade is
+ simulated read-only (python3-apt, same resolver as apt), holds surface
+ as pinned, library renames collapse to one line, and critical packages
+ are flagged red. The dpkg lock is taken only at commit, where the
+ approved change-set hash is re-validated first.
+ .
+ Updates are wrapped in a Phoenix Point automatically by snapper's own
+ apt hooks - Fireproof creates zero snapshots of its own, it only names
+ the first pre-snapshot of the transaction as the rollback target. After
+ the commit a headless verify battery checks dpkg consistency, initrd
+ freshness, GRUB, dkms modules, newly failed services, and the network;
+ if the desktop ever fails to come back, the next boot opens recovery at
+ exactly the right Point. One command (fireproof) drives everything the
+ page can do. No telemetry, no unattended downloads or installs.

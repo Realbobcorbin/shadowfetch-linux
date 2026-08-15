@@ -1,0 +1,79 @@
+#!/bin/sh
+# phoenix-overlay-banner - session banner for "Last Known Good Flame" boots.
+# Part of Shadowfetch Linux 2.1.2 "Fire Edition". Started per-session by
+# /etc/xdg/autostart/shadowfetch-phoenix-overlay.desktop.
+#
+# When the machine was booted from a read-only Phoenix Point (the grub-btrfs
+# overlay session, marker /run/phoenix-overlay), tell the user plainly what
+# session they are in and deep-link the one action that makes it permanent:
+# Control Center -> Phoenix -> Restore, preselecting the Point being ridden.
+# Restore is SUPPORTED from inside this session (phoenix-restore operates on
+# the real volume from subvolid=5; the tmpfs upper layer is irrelevant).
+#
+# In a normal boot the marker is absent and this exits immediately.
+
+set -u
+
+case "${1:-}" in
+  -h|--help)
+    cat <<'SFHELP'
+phoenix-overlay-banner - notify when running a "Last Known Good Flame" session.
+
+USAGE
+  phoenix-overlay-banner    show the overlay-session banner if applicable
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+    exit 0 ;;
+  --version)
+    echo "phoenix-overlay-banner (Shadowfetch Linux) $(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"; exit 0 ;;
+esac
+
+[ -f /run/phoenix-overlay ] || exit 0
+
+PHOENIX_SNAPSHOT=
+. /run/phoenix-overlay 2>/dev/null || true
+N="${PHOENIX_SNAPSHOT:-}"
+
+if [ -n "$N" ]; then
+    PAGE="recover:point=$N"
+    POINT_TEXT="Phoenix Point #$N"
+else
+    PAGE="recover"
+    POINT_TEXT="a Phoenix Point"
+fi
+
+TITLE="You are riding $POINT_TEXT"
+BODY="This session runs from a read-only snapshot; changes made now live in memory and vanish on reboot. Open Control Center -> Phoenix -> Restore to make it permanent."
+
+open_phoenix() {
+    if command -v shadowfetch-control >/dev/null 2>&1; then
+        exec shadowfetch-control --page "$PAGE"
+    fi
+}
+
+# Preferred: libnotify with an action button (blocks until dismissed/clicked).
+if command -v notify-send >/dev/null 2>&1; then
+    action=$(notify-send --app-name="Phoenix Recovery" -u critical -t 0 \
+        -A "open=Open Phoenix Restore" "$TITLE" "$BODY" 2>/dev/null || true)
+    if [ "$action" = "open" ]; then
+        open_phoenix
+    fi
+    # If -A is unsupported, notify-send printed nothing and returned non-zero
+    # or showed a plain notification; fall through to kdialog only when the
+    # notification could not be shown at all.
+    exit 0
+fi
+
+# Fallback: kdialog.
+if command -v kdialog >/dev/null 2>&1; then
+    if kdialog --title "$TITLE" --warningyesno \
+        "$BODY\n\nOpen Phoenix Restore now?" --yes-label "Open Phoenix Restore" --no-label "Later"; then
+        open_phoenix
+    fi
+    exit 0
+fi
+
+# Last resort: leave a trace in the journal.
+echo "phoenix-overlay-banner: $TITLE - $BODY" >&2
+exit 0

@@ -1,0 +1,15 @@
+#!/bin/bash
+# Shadowfetch hook: 0015-sddm-autologin
+# Live-session ONLY: autologin live user 'shadow' into Plasma Wayland.
+# Persistent greeter settings (Umbra theme/Wayland/session dir) ship in the
+# shadowfetch-defaults package (10-shadowfetch.conf) so they survive install.
+# This autologin drop-in is removed at install time by the Calamares
+# shellprocess module, so installed systems present the SDDM greeter.
+set -e
+echo "[shadowfetch] Configuring SDDM live autologin..."
+mkdir -p /etc/sddm.conf.d
+printf '%s\n' '[Autologin]' 'User=shadow' 'Session=plasma.desktop' 'Relogin=false' > /etc/sddm.conf.d/10-shadowfetch-autologin.conf
+if dpkg -l sddm-theme-debian-breeze 2>/dev/null | grep -q '^ii' ; then
+    apt-get -y purge sddm-theme-debian-breeze || true
+fi
+echo "[shadowfetch] SDDM live autologin configured (shadow -> plasma.desktop)."

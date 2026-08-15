@@ -1,0 +1,203 @@
+<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"
+ "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">
+<!--
+  Shadowfetch Linux 2.1.4 "Fire Edition" - the seven-category launcher.
+
+  This is an XDG merge-dir drop-in.  startplasma sets XDG_MENU_PREFIX
+  unconditionally and kservice hardcodes applications-merged/, so this
+  file merges into plasma-applications.menu without ever touching
+  plasma-workspace's conffile.  kmenuedit user edits ALWAYS win over this
+  file: the stock DefaultMergeDirs line merges this drop-in before the
+  kmenuedit MergeFile, and last-merged wins.
+
+  Structure:
+    1. <Deleted/> for the stock top-level menus (recon set, plus the
+       common variant names, defensively - deleting a menu that does not
+       exist in the base file is a harmless no-op per the menu spec).
+    2. The seven Shadowfetch sections with their Category rules and
+       explicit desktop-file-id includes.
+    3. The Lost & Found (OnlyUnallocated) catch-all is preserved so no
+       application can ever disappear from the launcher.  The T3 QEMU
+       assertion is that this menu is EMPTY over the full ISO app set.
+-->
+<Menu>
+	<Name>Applications</Name>
+
+	<!-- 1. Delete the stock top-level menus. -->
+	<Menu>
+		<Name>Development</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Education</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Games</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Graphics</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Internet</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Multimedia</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Office</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Science</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Settingsmenu</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Settings</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>System</Name>
+		<Deleted/>
+	</Menu>
+	<Menu>
+		<Name>Utilities</Name>
+		<Deleted/>
+	</Menu>
+
+	<!-- 2. The seven Shadowfetch sections. -->
+
+	<!-- Create: Graphics or AudioVideo. -->
+	<Menu>
+		<Name>Shadowfetch-Create</Name>
+		<Directory>shadowfetch-create.directory</Directory>
+		<Include>
+			<Or>
+				<Category>Graphics</Category>
+				<Category>AudioVideo</Category>
+			</Or>
+		</Include>
+	</Menu>
+
+	<!-- Develop: Development. -->
+	<Menu>
+		<Name>Shadowfetch-Develop</Name>
+		<Directory>shadowfetch-develop.directory</Directory>
+		<Include>
+			<And>
+				<Category>Development</Category>
+				<Not><Category>X-Shadowfetch-AI</Category></Not>
+			</And>
+		</Include>
+	</Menu>
+
+	<!-- Communicate: Network AND one of the people-facing subtypes. -->
+	<Menu>
+		<Name>Shadowfetch-Communicate</Name>
+		<Directory>shadowfetch-communicate.directory</Directory>
+		<Include>
+			<And>
+				<Category>Network</Category>
+				<Or>
+					<Category>InstantMessaging</Category>
+					<Category>Email</Category>
+					<Category>Chat</Category>
+					<Category>WebBrowser</Category>
+				</Or>
+			</And>
+		</Include>
+	</Menu>
+
+	<!-- Play: Game. -->
+	<Menu>
+		<Name>Shadowfetch-Play</Name>
+		<Directory>shadowfetch-play.directory</Directory>
+		<Include>
+			<Category>Game</Category>
+		</Include>
+	</Menu>
+
+	<!--
+	  Protect: Security, plus the explicit privacy-set entries whose
+	  upstream Categories do not carry Security.  Desktop-file ids
+	  re-verified against the built ISO during T3 (upstream-owned).
+	-->
+	<Menu>
+		<Name>Shadowfetch-Protect</Name>
+		<Directory>shadowfetch-protect.directory</Directory>
+		<Include>
+			<Or>
+				<Category>Security</Category>
+				<Filename>org.keepassxc.KeePassXC.desktop</Filename>
+				<Filename>org.kde.kleopatra.desktop</Filename>
+				<Filename>org.onionshare.OnionShare.desktop</Filename>
+				<Filename>firewatch.desktop</Filename>
+			</Or>
+		</Include>
+	</Menu>
+
+	<!-- System: System or Settings. -->
+	<Menu>
+		<Name>Shadowfetch-System</Name>
+		<Directory>shadowfetch-system.directory</Directory>
+		<Include>
+			<And>
+				<Or>
+					<Category>System</Category>
+					<Category>Settings</Category>
+				</Or>
+				<Not><Category>X-Shadowfetch-AI</Category></Not>
+			</And>
+		</Include>
+	</Menu>
+
+	<!-- Local AI: Buzz, private workspaces and the Control Center front door. -->
+	<Menu>
+		<Name>Shadowfetch-AI</Name>
+		<Directory>shadowfetch-local-ai.directory</Directory>
+		<Include>
+			<Or>
+				<Category>X-Shadowfetch-AI</Category>
+				<Filename>shadowfetch-local-ai.desktop</Filename>
+				<Filename>shadowfetch-buzz.desktop</Filename>
+				<Filename>shadowfetch-welcome.desktop</Filename>
+			</Or>
+		</Include>
+	</Menu>
+
+	<!--
+	  3. Lost & Found: the OnlyUnallocated catch-all, preserved.  Named
+	  identically to the stock catch-all so the two merge into one menu
+	  where the base file defines it.  T3 widens Communicate's Or-list
+	  until this menu is empty over the full ISO app set.
+	-->
+	<Menu>
+		<Name>Lost &amp; Found</Name>
+		<OnlyUnallocated/>
+		<Include>
+			<All/>
+		</Include>
+	</Menu>
+
+	<!-- Fixed section order; anything unlisted (Lost & Found) follows. -->
+	<Layout>
+		<Menuname>Shadowfetch-Create</Menuname>
+		<Menuname>Shadowfetch-Develop</Menuname>
+		<Menuname>Shadowfetch-Communicate</Menuname>
+		<Menuname>Shadowfetch-Play</Menuname>
+		<Menuname>Shadowfetch-Protect</Menuname>
+		<Menuname>Shadowfetch-System</Menuname>
+		<Menuname>Shadowfetch-AI</Menuname>
+		<Merge type="menus"/>
+		<Merge type="files"/>
+	</Layout>
+
+</Menu>

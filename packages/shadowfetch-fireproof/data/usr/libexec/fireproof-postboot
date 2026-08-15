@@ -1,0 +1,117 @@
+#!/bin/sh
+# fireproof-postboot - the first-boot-after-update check.
+#
+# fireproofd writes /var/lib/shadowfetch/fireproof-pending (txn uuid +
+# pre-Point) before the reboot offer. GRUB has no boot assessment on this
+# platform, so this flag protocol is the entire "recovery opens at the
+# right Point" claim:
+#
+#   good boot  -> sddm is active and a user manager reached
+#                 graphical-session.target -> clear the flag silently.
+#   bad boot   -> either this boot never brought sddm up, or the PREVIOUS
+#                 boot (journalctl -b -1) never reached graphical.target
+#                 while the flag was pending -> leave the flag, write the
+#                 /etc/issue.d hint with the exact phoenix-restore command
+#                 (the no-GUI case), and drop a /run marker that the
+#                 session autostart check turns into the recovery dialog
+#                 preselecting the recorded pre-Point.
+#
+# Triggered normally at graphical.target and by a 120 s fallback timer for
+# boots that never get there. Part of Shadowfetch Linux.
+set -u
+
+FLAG=/var/lib/shadowfetch/fireproof-pending
+MARKER_DIR=/run/shadowfetch
+MARKER=$MARKER_DIR/fireproof-failed-boot
+ISSUE=/etc/issue.d/50-shadowfetch-fireproof.issue
+TEMPLATE=/usr/share/shadowfetch/fireproof/issue-recovery.template
+
+[ -f "$FLAG" ] || exit 0
+
+clear_flag() {
+    rm -f "$FLAG" "$MARKER" "$ISSUE"
+    exit 0
+}
+
+pre_point=$(sed -n 's/.*"pre_point"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$FLAG" | head -n 1)
+# "pre_point": null (ext4 root, DISABLE_APT_SNAPSHOT, no pre snapshot)
+# parses to empty. That means NO restore point exists: never fabricate
+# Point 0 (snapper's "current" pseudo-snapshot, not a restore target).
+# Nothing recoverable can be offered - clear the flag and stay silent;
+# the spec's honesty rule is "rollback unavailable, never silent zero".
+if [ -z "$pre_point" ]; then
+    clear_flag
+fi
+
+session_ok() {
+    systemctl is-active --quiet sddm.service || return 1
+    for uid in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $1}'); do
+        if systemctl -M "${uid}@.host" --user is-active --quiet graphical-session.target 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+mark_failed() {
+    mkdir -p "$MARKER_DIR"
+    printf '%s\n' "$pre_point" > "$MARKER"
+    if [ -r "$TEMPLATE" ]; then
+        mkdir -p /etc/issue.d
+        sed "s/@POINT@/$pre_point/g" "$TEMPLATE" > "$ISSUE"
+    fi
+    exit 0
+}
+
+# A machine that is not trying to run a desktop at all (headless or
+# multi-user default, sddm neither enabled nor active) cannot fail to
+# bring one back: clear the flag silently instead of inventing a failed
+# desktop from an SSH-driven update.
+if [ "$(systemctl get-default 2>/dev/null || true)" != "graphical.target" ] \
+   && ! systemctl is-enabled --quiet sddm.service 2>/dev/null \
+   && ! systemctl is-active --quiet sddm.service 2>/dev/null; then
+    clear_flag
+fi
+
+# Was the PREVIOUS boot (the one right after the update) a graphical
+# failure? Only meaningful when that boot actually ATTEMPTED graphical:
+# a `fireproof update` driven over SSH on a boot that legitimately never
+# started the desktop (headless, multi-user.target, QEMU harness) must
+# not poison the next - perfectly healthy - boot. Evidence of an
+# attempt: sddm activity in the previous journal, or graphical.target
+# being the system default.
+prev_out=$(journalctl -b -1 -o cat --no-pager -q 2>/dev/null || true)
+if [ -n "$prev_out" ]; then
+    prev_attempted=0
+    if printf '%s\n' "$prev_out" | grep -qi 'sddm'; then
+        prev_attempted=1
+    elif [ "$(systemctl get-default 2>/dev/null || true)" = "graphical.target" ]; then
+        prev_attempted=1
+    fi
+    if [ "$prev_attempted" -eq 1 ] \
+       && ! printf '%s\n' "$prev_out" | grep -qiE 'reached target.*graphical'; then
+        mark_failed
+    fi
+fi
+
+# Current boot: wait up to 10 minutes for a real graphical session. sddm
+# alive the whole time counts as the desktop coming back (the greeter IS
+# graphics); a user session clears immediately.
+waited=0
+sddm_seen=0
+while [ "$waited" -lt 600 ]; do
+    if session_ok; then
+        clear_flag
+    fi
+    systemctl is-active --quiet sddm.service && sddm_seen=1
+    sleep 10
+    waited=$((waited + 10))
+done
+
+if [ "$sddm_seen" -eq 1 ]; then
+    # Greeter stayed up for ten minutes: graphics returned, nobody logged
+    # in. That is a good boot, not a failure.
+    clear_flag
+fi
+
+mark_failed

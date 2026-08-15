@@ -1,0 +1,667 @@
+#!/usr/bin/env python3
+"""Shadowfetch Fireproof Updates - the minimal FireproofPage.
+
+Same framework and visual language as shadowfetch-control (PyQt6,
+graphite + gold). Owns zero root logic: everything privileged happens in
+fireproofd behind polkit, and the one rollback button runs the same
+pkexec /usr/libexec/phoenix-restore path Phoenix owns.
+"""
+
+# ---- --help / --version, BEFORE any other import ----------------------------
+# Deliberately above the Qt import: this is a GUI tool, and importing PyQt6
+# first would make `--help` die with an import error on a headless machine
+# instead of printing anything.
+import os as _sfsos
+import sys as _sfsys
+if any(_a in ("-h", "--help") for _a in _sfsys.argv[1:]):
+    print("""shadowfetch-fireproof - Fireproof Updates page for Shadowfetch Linux.
+
+USAGE
+  shadowfetch-fireproof                     open the Fireproof Updates page
+  shadowfetch-fireproof --postboot-recover N
+                                            open directly on the recovery
+                                            card preselecting Phoenix
+                                            Point N (used by the
+                                            first-boot-after-update check)
+
+WHAT IT DOES
+  Analyzes the pending update without taking any lock or downloading
+  anything, warns before removing anything, wraps the update in a
+  Phoenix Point (via snapper's own apt hooks - never its own snapshots),
+  verifies the system afterward, and offers one rollback button.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/""")
+    raise SystemExit(0)
+if "--version" in _sfsys.argv[1:]:
+    print("shadowfetch-fireproof (Shadowfetch Linux) " + (open("/usr/share/shadowfetch/version").read().strip() if _sfsos.path.exists("/usr/share/shadowfetch/version") else "unknown"))
+    raise SystemExit(0)
+
+import json
+import sys
+
+from PyQt6.QtCore import Qt, QProcess, QTimer, pyqtSlot
+from PyQt6.QtDBus import (
+    QDBusConnection,
+    QDBusInterface,
+    QDBusPendingCallWatcher,
+    QDBusReply,
+)
+from PyQt6.QtGui import QBrush, QColor, QIcon
+from PyQt6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+
+BG = "#151619"
+CARD = "#202126"
+BORDER = "#34363d"
+GOLD = "#d8a24a"
+TEXT = "#f0eee9"
+MUTED = "#aaa69f"
+GREEN = "#72c69c"
+RED = "#e07a6a"
+
+BUS_NAME = "org.shadowfetch.Fireproof1"
+OBJ_PATH = "/org/shadowfetch/Fireproof1"
+IFACE = "org.shadowfetch.Fireproof1"
+
+PHASE_COPY = {
+    "locking": "Taking the package lock (analyze never held it)…",
+    "revalidating": "Re-checking the update under the lock…",
+    "downloading": "Downloading packages — cancellable, nothing installs yet.",
+    "news": "Checking release NEWS…",
+    "committing": "Installing — safe to leave running; cancel is disabled.",
+    "verifying": "Running the verify battery…",
+}
+
+
+def _sf_version():
+    try:
+        return open('/usr/share/shadowfetch/version').read().strip()
+    except Exception:
+        return 'unknown'
+
+
+def human_mb(n):
+    return "%.1f MB" % (n / (1024.0 * 1024.0))
+
+
+class Card(QFrame):
+    def __init__(self, title=None):
+        super().__init__()
+        self.setObjectName("card")
+        self.body = QVBoxLayout(self)
+        self.body.setContentsMargins(16, 13, 16, 13)
+        self.body.setSpacing(6)
+        if title:
+            heading = QLabel(title)
+            heading.setObjectName("cardTitle")
+            self.body.addWidget(heading)
+
+
+class FireproofPage(QWidget):
+    def __init__(self, recover_point=None):
+        super().__init__()
+        self.setWindowTitle("Fireproof Updates")
+        self.setMinimumSize(760, 640)
+        self.resize(820, 700)
+        icon = QIcon.fromTheme("shadowfetch")
+        if icon.isNull():
+            icon = QIcon.fromTheme("system-software-update")
+        if not icon.isNull():
+            self.setWindowIcon(icon)
+
+        self.analysis = None
+        self.busy = False
+        self.last_result = None
+        self.recover_point = recover_point
+
+        self.setStyleSheet(f"""
+            QWidget {{ background: {BG}; color: {TEXT}; font-size: 13px; }}
+            QFrame#card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 8px; }}
+            QLabel#title {{ font-size: 28px; font-weight: 700; }}
+            QLabel#subtitle {{ color: {MUTED}; }}
+            QLabel#detail {{ color: {MUTED}; font-size: 12px; }}
+            QLabel#cardTitle {{ font-size: 17px; font-weight: 650; }}
+            QLabel#good {{ color: {GREEN}; font-weight: 650; }}
+            QLabel#bad {{ color: {RED}; font-weight: 650; }}
+            QListWidget {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 6px; }}
+            QPlainTextEdit {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 6px; color: {TEXT}; }}
+            QProgressBar {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 6px;
+                            text-align: center; color: {TEXT}; }}
+            QProgressBar::chunk {{ background: {GOLD}; border-radius: 5px; }}
+            QPushButton {{ background: {GOLD}; color: #151515; border: 0; border-radius: 6px;
+                           padding: 6px 12px; font-weight: 700; }}
+            QPushButton:hover {{ background: #efb95d; }}
+            QPushButton:pressed {{ background: #bf8735; }}
+            QPushButton:disabled {{ background: {BORDER}; color: {MUTED}; }}
+            QPushButton#quiet {{ background: {CARD}; color: {TEXT}; border: 1px solid {BORDER}; }}
+            QPushButton#danger {{ background: {RED}; color: #151515; }}
+        """)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        inner = QWidget()
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
+        root = QVBoxLayout(inner)
+        root.setContentsMargins(32, 28, 32, 24)
+        root.setSpacing(14)
+
+        title = QLabel("Fireproof Updates")
+        title.setObjectName("title")
+        subtitle = QLabel("Updates that warn before removing anything, wrap "
+                          "themselves in a Phoenix Point, and verify your "
+                          "system afterward.")
+        subtitle.setObjectName("subtitle")
+        subtitle.setWordWrap(True)
+        root.addWidget(title)
+        root.addWidget(subtitle)
+
+        # -- summary card --------------------------------------------------
+        self.summary_card = Card("Pending update")
+        self.summary_label = QLabel("Analyzing… (no lock is taken and "
+                                    "nothing is downloaded)")
+        self.summary_label.setWordWrap(True)
+        self.banner_label = QLabel("")
+        self.banner_label.setObjectName("bad")
+        self.banner_label.setWordWrap(True)
+        self.banner_label.hide()
+        self.holds_label = QLabel("")
+        self.holds_label.setObjectName("detail")
+        self.holds_label.setWordWrap(True)
+        self.holds_label.hide()
+        buttons = QHBoxLayout()
+        self.refresh_button = QPushButton("Re-analyze")
+        self.refresh_button.setObjectName("quiet")
+        self.refresh_button.clicked.connect(self.analyze)
+        self.update_button = QPushButton("Update")
+        self.update_button.clicked.connect(self.confirm_update)
+        self.update_button.setEnabled(False)
+        buttons.addWidget(self.refresh_button)
+        buttons.addStretch(1)
+        buttons.addWidget(self.update_button)
+        self.summary_card.body.addWidget(self.summary_label)
+        self.summary_card.body.addWidget(self.banner_label)
+        self.summary_card.body.addWidget(self.holds_label)
+        self.summary_card.body.addLayout(buttons)
+        root.addWidget(self.summary_card)
+
+        # -- red / yellow list --------------------------------------------
+        self.list_card = Card("What changes")
+        self.change_list = QListWidget()
+        self.change_list.setMinimumHeight(180)
+        self.change_list.setSelectionMode(
+            QListWidget.SelectionMode.NoSelection)
+        self.list_card.body.addWidget(self.change_list)
+        legend = QLabel("Red rows can cost the boot, the session or the "
+                        "network if they go wrong — read them before "
+                        "proceeding. Everything else is yellow.")
+        legend.setObjectName("detail")
+        legend.setWordWrap(True)
+        self.list_card.body.addWidget(legend)
+        root.addWidget(self.list_card)
+
+        # -- progress ------------------------------------------------------
+        self.progress_card = Card("Progress")
+        self.phase_label = QLabel("")
+        self.phase_label.setWordWrap(True)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.cancel_button = QPushButton("Cancel download")
+        self.cancel_button.setObjectName("quiet")
+        self.cancel_button.clicked.connect(self.cancel_download)
+        self.cancel_button.hide()
+        self.progress_card.body.addWidget(self.phase_label)
+        self.progress_card.body.addWidget(self.progress_bar)
+        self.progress_card.body.addWidget(self.cancel_button,
+                                          alignment=Qt.AlignmentFlag.AlignRight)
+        self.progress_card.hide()
+        root.addWidget(self.progress_card)
+
+        # -- verify checklist (animated) ----------------------------------
+        self.verify_card = Card("After the update")
+        self.verify_list = QListWidget()
+        self.verify_list.setMinimumHeight(160)
+        self.verify_list.setSelectionMode(
+            QListWidget.SelectionMode.NoSelection)
+        self.verdict_label = QLabel("")
+        self.verdict_label.setWordWrap(True)
+        self.rollback_button = QPushButton("Restore Phoenix Point")
+        self.rollback_button.setObjectName("danger")
+        self.rollback_button.clicked.connect(self.confirm_rollback)
+        self.rollback_button.hide()
+        self.verify_card.body.addWidget(self.verify_list)
+        self.verify_card.body.addWidget(self.verdict_label)
+        self.verify_card.body.addWidget(self.rollback_button,
+                                        alignment=Qt.AlignmentFlag.AlignRight)
+        self.verify_card.hide()
+        root.addWidget(self.verify_card)
+
+        footer = QLabel(f"Shadowfetch Linux {_sf_version()} · Snapshots by "
+                        "Phoenix (80snapper) · Fireproof creates none of its "
+                        "own · No telemetry")
+        footer.setObjectName("subtitle")
+        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        root.addWidget(footer)
+        root.addStretch(1)
+
+        # -- D-Bus ---------------------------------------------------------
+        self.bus = QDBusConnection.systemBus()
+        self.fp = QDBusInterface(BUS_NAME, OBJ_PATH, IFACE, self.bus)
+        # Update (and the other polkit-gated methods) reply only after the
+        # user answers the polkit prompt. Qt's default 25 s call timeout
+        # would report a spurious failure on a slow password entry, so use
+        # the same 600 s window the daemon gives polkit.
+        self.fp.setTimeout(600000)
+        self.bus.connect(BUS_NAME, OBJ_PATH, IFACE, "Progress",
+                         self.on_progress)
+        self.bus.connect(BUS_NAME, OBJ_PATH, IFACE, "NewsReady",
+                         self.on_news)
+        self.bus.connect(BUS_NAME, OBJ_PATH, IFACE, "DriftDetected",
+                         self.on_drift)
+        self.bus.connect(BUS_NAME, OBJ_PATH, IFACE, "Finished",
+                         self.on_finished)
+
+        self._verify_queue = []
+        self._verify_timer = QTimer(self)
+        self._verify_timer.setInterval(160)
+        self._verify_timer.timeout.connect(self._pop_verify_row)
+
+        if self.recover_point is not None:
+            QTimer.singleShot(200, self.postboot_recover_dialog)
+        QTimer.singleShot(50, self.analyze)
+
+    # ---- analyze ---------------------------------------------------------
+
+    def analyze(self):
+        if self.busy:
+            return
+        self.summary_label.setText("Analyzing… (no lock is taken and nothing "
+                                   "is downloaded)")
+        self.update_button.setEnabled(False)
+        call = self.fp.asyncCall("Analyze")
+        watcher = QDBusPendingCallWatcher(call, self)
+        watcher.finished.connect(self._analyze_done)
+
+    def _analyze_done(self, watcher):
+        watcher.deleteLater()
+        reply = QDBusReply(watcher)
+        if not reply.isValid():
+            self.summary_label.setText(
+                "Could not reach fireproofd on the system bus: %s"
+                % reply.error().message())
+            return
+        try:
+            self.render_analysis(json.loads(reply.value()))
+        except (ValueError, KeyError) as e:
+            self.summary_label.setText("Analyze returned malformed data: %s" % e)
+
+    def render_analysis(self, a):
+        self.analysis = a
+        c = a["counts"]
+        b = a["banners"]
+        if c["total"] == 0:
+            self.summary_label.setText(
+                "Your system is up to date against the current package "
+                "lists. Nothing is pending.")
+            self.update_button.setEnabled(False)
+        else:
+            self.summary_label.setText(
+                "%d to upgrade, %d new, %d removals, %d library renames — "
+                "%s to download. %s"
+                % (c["upgrade"], c["install"], c["remove"], c["rename"],
+                   human_mb(c["download_bytes"]), a["kept_back"]["story"]))
+            self.update_button.setEnabled(True)
+
+        banners = []
+        if b.get("kernel"):
+            banners.append("New kernel (%s): %s."
+                           % (", ".join(b["kernel"]["packages"]),
+                              b["kernel"]["note"]))
+        if b.get("nvidia"):
+            banners.append(b["nvidia"]["note"] + ".")
+        if b.get("major_transition"):
+            banners.append("Major transition: this is a large update — read "
+                           "the list before proceeding.")
+        if b.get("same_set_rollback"):
+            banners.append("This is the same update that was rolled back on "
+                           "%s." % b["same_set_rollback"]["date"])
+        if not b.get("phoenix_available"):
+            banners.append("No Phoenix Point — rollback unavailable "
+                           "(Phoenix Points require the Btrfs filesystem, "
+                           "chosen at install).")
+        self.banner_label.setText("\n".join(banners))
+        self.banner_label.setVisible(bool(banners))
+
+        if a["holds"]:
+            self.holds_label.setText(
+                "Held: " + ", ".join("%s (pinned, will not update)" % h["name"]
+                                     for h in a["holds"]))
+            self.holds_label.show()
+        else:
+            self.holds_label.hide()
+
+        self.change_list.clear()
+        def add_row(text, red, muted=False):
+            if red:
+                item = QListWidgetItem("●  " + text)
+                item.setForeground(QBrush(QColor(RED)))
+            elif muted:
+                item = QListWidgetItem("·  " + text)
+                item.setForeground(QBrush(QColor(MUTED)))
+            else:
+                item = QListWidgetItem("●  " + text)
+                item.setForeground(QBrush(QColor(GOLD)))
+            self.change_list.addItem(item)
+
+        for p in a["removals"]:
+            add_row("REMOVE  %s  (%s)" % (p["name"], p["installed"]), True)
+        for r in a["library_renames"]:
+            add_row("RENAME  %s → %s  — same library, new name"
+                    % (r["from"], r["to"]), False, muted=True)
+        reds = [p for p in a["upgrades"] + a["installs"] if p["red"]]
+        yellows = [p for p in a["upgrades"] + a["installs"] if not p["red"]]
+        for p in reds:
+            what = ("%s → %s" % (p["installed"], p["candidate"])
+                    if p["installed"] else "new, %s" % p["candidate"])
+            add_row("%s  (%s)" % (p["name"], what), True)
+        for p in yellows:
+            what = ("%s → %s" % (p["installed"], p["candidate"])
+                    if p["installed"] else "new, %s" % p["candidate"])
+            add_row("%s  (%s)" % (p["name"], what), False, muted=True)
+
+    # ---- update ----------------------------------------------------------
+
+    def confirm_update(self):
+        if not self.analysis or self.busy:
+            return
+        b = self.analysis["banners"]
+        box = QMessageBox(self)
+        box.setWindowTitle("Fireproof Updates")
+        lines = ["Apply this update now?"]
+        if b.get("phoenix_available"):
+            lines.append("It will be wrapped in a Phoenix Point "
+                         "automatically, and verified afterward.")
+        else:
+            lines.append("No Phoenix Point — rollback unavailable on this "
+                         "filesystem.")
+        if b.get("same_set_rollback"):
+            lines.append("Careful: this is the same update that was rolled "
+                         "back on %s." % b["same_set_rollback"]["date"])
+        box.setText("\n\n".join(lines))
+        proceed = box.addButton("Update", QMessageBox.ButtonRole.AcceptRole)
+        dont = box.addButton("Don't proceed", QMessageBox.ButtonRole.RejectRole)
+        # RED content or a previously rolled-back set flips the default.
+        box.setDefaultButton(dont if b.get("default_dont_proceed") else proceed)
+        box.exec()
+        if box.clickedButton() is not proceed:
+            return
+        self.busy = True
+        self.update_button.setEnabled(False)
+        self.refresh_button.setEnabled(False)
+        self.progress_card.show()
+        self.verify_card.hide()
+        self.phase_label.setText("Requesting authorization…")
+        self.progress_bar.setValue(0)
+        reply = QDBusReply(self.fp.call("Update",
+                                        self.analysis["change_set_hash"]))
+        if not reply.isValid():
+            self.busy = False
+            self.refresh_button.setEnabled(True)
+            self.update_button.setEnabled(True)
+            self.phase_label.setText("Not started: %s"
+                                     % reply.error().message())
+
+    def cancel_download(self):
+        self.fp.call("CancelDownload")
+        self.cancel_button.setEnabled(False)
+
+    # ---- daemon signals --------------------------------------------------
+
+    @pyqtSlot(str, int, str)
+    def on_progress(self, phase, percent, message):
+        if phase == "phase":
+            self.phase_label.setText(PHASE_COPY.get(message, message))
+            self.cancel_button.setVisible(message == "downloading")
+            self.cancel_button.setEnabled(message == "downloading")
+            if message in ("locking", "revalidating", "news", "verifying"):
+                self.progress_bar.setRange(0, 0)
+            else:
+                self.progress_bar.setRange(0, 100)
+        elif phase in ("download", "install"):
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(percent)
+            self.phase_label.setText(message)
+        elif phase == "lock-wait":
+            self.phase_label.setText(message)
+        elif phase == "install-error":
+            self.phase_label.setText(message)
+
+    @pyqtSlot(str, str)
+    def on_news(self, txn, text):
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Release NEWS for this update")
+        dialog.setText("Debian ships important notes with some packages. "
+                       "Nothing has been installed yet.")
+        view = QPlainTextEdit(text)
+        view.setReadOnly(True)
+        view.setMinimumSize(560, 300)
+        dialog.layout().addWidget(view, 1, 0, 1,
+                                  dialog.layout().columnCount())
+        proceed = dialog.addButton("Proceed", QMessageBox.ButtonRole.AcceptRole)
+        dialog.addButton("Stop", QMessageBox.ButtonRole.RejectRole)
+        dialog.setDefaultButton(proceed)
+        dialog.exec()
+        if dialog.clickedButton() is proceed:
+            self.fp.call("ProceedCommit")
+        else:
+            self.fp.call("AbortCommit")
+
+    @pyqtSlot(str)
+    def on_drift(self, analysis_json):
+        self.busy = False
+        self.refresh_button.setEnabled(True)
+        self.progress_card.hide()
+        try:
+            self.render_analysis(json.loads(analysis_json))
+        except (ValueError, KeyError):
+            self.analyze()
+        QMessageBox.information(
+            self, "Fireproof Updates",
+            "The update changed while you were reading — review the new "
+            "list. Nothing was installed.")
+
+    @pyqtSlot(str)
+    def on_finished(self, result_json):
+        self.busy = False
+        self.refresh_button.setEnabled(True)
+        self.progress_card.hide()
+        try:
+            result = json.loads(result_json)
+        except ValueError:
+            result = {"ok": False, "message": "malformed result"}
+        self.last_result = result
+        if result.get("stage") in ("download", "news", "drift"):
+            if result.get("message"):
+                self.phase_label.setText(result["message"])
+                self.progress_card.show()
+                self.progress_bar.setRange(0, 100)
+                self.progress_bar.setValue(0)
+            self.analyze()
+            return
+        verify = result.get("verify")
+        if verify:
+            self.show_verify(verify, result)
+        elif result.get("message"):
+            QMessageBox.warning(self, "Fireproof Updates", result["message"])
+        self.analyze()
+
+    # ---- verify checklist (animated) ------------------------------------
+
+    def show_verify(self, verify, result):
+        self.verify_card.show()
+        self.verify_list.clear()
+        self.verdict_label.setText("")
+        self.rollback_button.hide()
+        self._verify_queue = list(verify["checks"])
+        self._verify_verdict = verify
+        self._verify_result = result
+        self._verify_timer.start()
+
+    def _pop_verify_row(self):
+        if self._verify_queue:
+            chk = self._verify_queue.pop(0)
+            mark = {"pass": "✓", "warn": "!", "fail": "✗"}.get(chk["status"], "·")
+            color = {"pass": GREEN, "warn": GOLD, "fail": RED}.get(chk["status"], MUTED)
+            text = "%s  %s" % (mark, chk["label"])
+            if chk["status"] != "pass":
+                text += "  —  %s" % chk["detail"]
+            item = QListWidgetItem(text)
+            item.setForeground(QBrush(QColor(color)))
+            self.verify_list.addItem(item)
+            self.verify_list.scrollToBottom()
+            return
+        self._verify_timer.stop()
+        verify = self._verify_verdict
+        verdict = verify["verdict"]
+        point = verify.get("restore_point")
+        if verdict == "ok":
+            self.verdict_label.setObjectName("good")
+            self.verdict_label.setText("All checks passed.")
+        elif verdict == "reboot-recommended":
+            self.verdict_label.setObjectName("good")
+            self.verdict_label.setText(
+                "Checks passed with notes — continue, reboot recommended.")
+        else:
+            self.verdict_label.setObjectName("bad")
+            self.verdict_label.setText(
+                "Something did not verify. Your system is protected by "
+                "Phoenix Point #%s — restoring it is the safe move."
+                % (point if point is not None else "?"))
+            if point is not None and \
+                    self._verify_result.get("phoenix_available", True):
+                self.rollback_button.show()
+        self.verdict_label.setStyleSheet("")  # re-polish objectName styling
+        self.verdict_label.style().unpolish(self.verdict_label)
+        self.verdict_label.style().polish(self.verdict_label)
+
+    # ---- rollback: one button, same pkexec phoenix-restore path ----------
+
+    def rollback_target(self):
+        reply = QDBusReply(self.fp.call("RollbackTarget"))
+        if not reply.isValid():
+            return None
+        try:
+            return json.loads(reply.value())
+        except ValueError:
+            return None
+
+    def confirm_rollback(self):
+        target = self.rollback_target()
+        if not target or target.get("point") is None:
+            QMessageBox.warning(self, "Fireproof Updates",
+                                "No recorded pre-update Point to restore.")
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("Restore Phoenix Point")
+        box.setText("Restore Phoenix Point #%s now?\n\nThis returns the "
+                    "system to the moment before the last update. Personal "
+                    "files are not touched. Reboot afterwards."
+                    % target["point"])
+        restore = box.addButton("Restore", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(restore)
+        box.exec()
+        if box.clickedButton() is not restore:
+            return
+        self.run_restore(target)
+
+    def run_restore(self, target):
+        self.rollback_button.setEnabled(False)
+        process = QProcess(self)
+        process.setProgram("pkexec")
+        process.setArguments(["/usr/libexec/phoenix-restore",
+                              str(target["point"])])
+
+        def done(code, _status):
+            self.rollback_button.setEnabled(True)
+            if code == 0:
+                if target.get("txn"):
+                    self.fp.call("RecordRollback", target["txn"])
+                QMessageBox.information(
+                    self, "Fireproof Updates",
+                    "Restored. Reboot to boot the restored system. If the "
+                    "same update is offered again, Fireproof will warn you "
+                    "and default to Don't proceed.")
+                self.analyze()
+            else:
+                QMessageBox.warning(
+                    self, "Fireproof Updates",
+                    "phoenix-restore exited with status %d. Nothing further "
+                    "was changed." % code)
+        process.finished.connect(done)
+        process.start()
+
+    # ---- postboot recovery entry ----------------------------------------
+
+    def postboot_recover_dialog(self):
+        # Same honesty gate as confirm_rollback/cmd_rollback: never offer
+        # a restore when Phoenix is unavailable (non-Btrfs root, snapshots
+        # disabled) - a fabricated Point would be a false safety claim.
+        target = self.rollback_target() or {}
+        if not target.get("phoenix_available"):
+            QMessageBox.warning(
+                self, "Fireproof Updates",
+                "The desktop failed to start after the last update, but no "
+                "Phoenix Point exists to restore — rollback is unavailable "
+                "on this filesystem or with apt snapshots disabled.")
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("The last update did not come back up")
+        box.setText("The desktop failed to start after the last update.\n\n"
+                    "Your system is protected by Phoenix Point #%s — "
+                    "restoring it returns everything to the moment before "
+                    "that update. Personal files are not touched."
+                    % self.recover_point)
+        restore = box.addButton("Restore Point #%s" % self.recover_point,
+                                QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Not now", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(restore)
+        box.exec()
+        if box.clickedButton() is restore:
+            self.run_restore({"point": self.recover_point,
+                              "txn": target.get("txn")})
+
+
+def parse_recover_arg(argv):
+    if "--postboot-recover" in argv:
+        i = argv.index("--postboot-recover")
+        if i + 1 < len(argv):
+            try:
+                return int(argv[i + 1])
+            except ValueError:
+                return None
+    return None
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    app.setApplicationName("shadowfetch-fireproof")
+    window = FireproofPage(recover_point=parse_recover_arg(sys.argv))
+    window.show()
+    raise SystemExit(app.exec())

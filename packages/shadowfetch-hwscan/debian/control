@@ -1,0 +1,32 @@
+Source: shadowfetch-hwscan
+Section: utils
+Priority: optional
+Maintainer: Shadowfetch Project <signing@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13), python3, python3-psutil
+Standards-Version: 4.6.2
+Homepage: https://shadowfetch.com/linux/
+
+Package: shadowfetch-hwscan
+Architecture: all
+Depends:
+ ${misc:Depends},
+ python3,
+ python3-psutil,
+ pciutils
+Recommends:
+ vulkan-tools
+Description: Shadowfetch hardware and AI capability scanner
+ One scanner, one fact file. Reads CPU flags, cores, RAM and GPUs
+ using unprivileged sysfs and /proc reads plus two time-boxed local
+ probes (vulkaninfo --json and nvidia-smi, 3 s each, failure means
+ "unknown"), and writes the world-readable fact file
+ /var/lib/shadowfetch/hwscan.json that every Shadowfetch surface
+ reads: the Ignition AI Workstation card, the Welcome model cards,
+ and the Control Center Agents and Drivers pages.
+ .
+ Every VRAM figure carries a source label (measured, estimated,
+ shared or unknown), the verdict wording never calls slow hardware
+ comfortable, and the deterministic recommendation table is pinned
+ by fixture unit tests run at build time. Capabilities at rest only:
+ Firewatch owns every runtime number. Nothing here talks to the
+ network.

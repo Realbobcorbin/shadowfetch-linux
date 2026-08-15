@@ -1,0 +1,4 @@
+usr/libexec/firewatchd                                      usr/libexec/
+usr/lib/systemd/system/shadowfetch-firewatchd.service       usr/lib/systemd/system/
+usr/share/dbus-1/system.d/org.shadowfetch.Firewatch1.conf   usr/share/dbus-1/system.d/
+etc/smartmontools/smartd_warning.d/firewatch                etc/smartmontools/smartd_warning.d/

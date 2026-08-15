@@ -1,0 +1,79 @@
+name: Bug report
+description: Report a reproducible Shadowfetch Linux bug or build/release problem.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use Discussions for support questions. Use this form for reproducible bugs.
+        Do not attach password CSVs, secrets, tokens, or unredacted private logs.
+  - type: input
+    id: iso
+    attributes:
+      label: ISO filename
+      description: Exact ISO filename you downloaded or installed from.
+      placeholder: shadowfetch-2.1.1-amd64.iso
+    validations:
+      required: true
+  - type: dropdown
+    id: checksum
+    attributes:
+      label: Did the SHA-256 checksum match?
+      options:
+        - "Yes"
+        - "No"
+        - "Not checked"
+    validations:
+      required: true
+  - type: dropdown
+    id: boot_mode
+    attributes:
+      label: Boot mode
+      options:
+        - UEFI
+        - Legacy BIOS
+        - Unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: secure_boot
+    attributes:
+      label: Secure Boot state
+      options:
+        - Disabled
+        - Enabled
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware
+      description: CPU, GPU, RAM, disk layout, and Wi-Fi chipset if known.
+      placeholder: CPU / GPU / RAM / storage / Wi-Fi
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: installer
+    attributes:
+      label: Installer or live-session details
+      description: For installer failures, say where Calamares stopped and whether the live session worked.
+  - type: textarea
+    id: health
+    attributes:
+      label: Redacted shadowfetch-health output
+      description: Paste `shadowfetch-health --json` only after removing anything you consider private.
+      render: json

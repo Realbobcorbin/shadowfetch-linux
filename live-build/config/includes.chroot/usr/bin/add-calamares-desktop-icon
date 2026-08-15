@@ -1,0 +1,33 @@
+#!/bin/sh
+# Shadowfetch replacement for Debian's live-session desktop-icon helper.
+set -eu
+
+desktop=$(xdg-user-dir DESKTOP 2>/dev/null || true)
+if [ -z "$desktop" ]; then
+    desktop=${HOME:-/home/shadow}/Desktop
+fi
+
+source=/usr/share/applications/calamares-install-debian.desktop
+target=$desktop/calamares-install-debian.desktop
+install -d -m 0755 "$desktop"
+install -m 0755 "$source" "$target"
+
+if [ "${XDG_CURRENT_DESKTOP:-}" = "XFCE" ] && command -v gio >/dev/null 2>&1; then
+    gio set --type=string "$target" metadata::trusted true || true
+    checksum=$(sha256sum "$target" | cut -d ' ' -f 1)
+    gio set --type=string "$target" metadata::xfce-exe-checksum "$checksum" || true
+    touch "$target"
+fi
+
+# Preload Calamares from idle I/O cycles. Failure here is only a performance
+# loss and must never degrade the desktop session.
+if command -v ionice >/dev/null 2>&1; then
+    ionice -c 3 cat /usr/bin/calamares >/dev/null 2>&1 || true
+    ldd /usr/bin/calamares 2>/dev/null \
+        | awk '$2 == "=>" && $3 ~ /^\// { print $3 }' \
+        | while IFS= read -r library; do
+            if [ -r "$library" ]; then
+                ionice -c 3 cat "$library" >/dev/null 2>&1 || true
+            fi
+        done
+fi

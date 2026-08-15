@@ -1,0 +1,25 @@
+#!/bin/sh
+# 2.1.2 Fire: drop the heavyweight LV2 collection the founder moved to Pro Audio.
+#
+# zam-plugins (160 MB) arrives only as an easyeffects *Recommends*, so nothing in the
+# image needs it -- but --apt-recommends true pulls it in. Purging here keeps
+# EasyEffects (a named default) while the plugin pack becomes a one-click Pro Audio
+# install, exactly as instructed.
+set -e
+if dpkg-query -W zam-plugins >/dev/null 2>&1; then
+  apt-get purge -y zam-plugins
+  echo "[shadowfetch] zam-plugins purged -> Welcome Pro Audio preset"
+fi
+
+# fonts-noto-extra (326 MB) + fonts-noto-cjk-extra (210 MB) arrive as LibreOffice
+# Recommends even when only fonts-noto-core is seeded. Nothing hard-depends on them
+# (verified: zero Depends rdepends in the built image). Core + CJK stay; full
+# coverage is the one-click "Extended language fonts" catalog entry.
+for f in fonts-noto-extra fonts-noto-cjk-extra; do
+  if dpkg-query -W "$f" >/dev/null 2>&1; then
+    apt-get purge -y "$f"
+    echo "[shadowfetch] $f purged -> Welcome catalog (fonts-extended)"
+  fi
+done
+
+apt-get autoremove -y --purge || true

@@ -1,0 +1,45 @@
+#!/bin/sh
+# firewatch - smartd warning hook for the Shadowfetch Firewatch daemon.
+#
+# smartd runs the scripts in /etc/smartmontools/smartd_warning.d/ (via
+# smartd_warning.sh) whenever a monitored disk trips a health, attribute or
+# self-test warning, with the details in SMARTD_* environment variables.
+#
+# This hook forwards those details to firewatchd's root-only local socket
+# (/run/shadowfetch/firewatch-smartd.sock, mode 0600) so the failure shows
+# up in the Firewatch storage-health badge and as a StorageHealth D-Bus
+# signal immediately, not at the next 10-minute smartctl refresh.
+#
+# Nothing leaves the machine. If firewatchd is not running the send fails
+# silently and smartd's own mail/log handling is unaffected: this hook must
+# never break the stock warning path, so it always exits 0.
+
+SOCK=/run/shadowfetch/firewatch-smartd.sock
+
+[ -S "$SOCK" ] || exit 0
+command -v python3 >/dev/null 2>&1 || exit 0
+
+# python3 (stdlib only) reads the SMARTD_* variables straight from the
+# environment, so no shell quoting of untrusted strings ever happens here.
+python3 - "$SOCK" <<'PYEOF' 2>/dev/null || :
+import json
+import os
+import socket
+import sys
+
+payload = {"source": "smartd"}
+for key, value in os.environ.items():
+    if key.startswith("SMARTD_"):
+        payload[key[len("SMARTD_"):].lower()] = value[:1024]
+
+try:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(2.0)
+    s.connect(sys.argv[1])
+    s.sendall(json.dumps(payload).encode())
+    s.close()
+except OSError:
+    pass
+PYEOF
+
+exit 0

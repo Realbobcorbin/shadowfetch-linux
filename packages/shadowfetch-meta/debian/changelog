@@ -1,0 +1,353 @@
+shadowfetch-meta (2.1.4-1) umbra; urgency=medium
+
+  * Rebuild the Fire Edition desktop and creative metapackages for 2.1.4.
+  * Convert shadowfetch-nvidia into a driver-free compatibility package;
+    verified hardware-aware installation now belongs to shadowfetch-gpu.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sat, 08 Aug 2026 11:32:00 -0400
+
+shadowfetch-meta (2.1.3-1) unstable; urgency=high
+
+  * Version bump to match the 2.1.3 release. No functional changes in this
+    package. 2.1.3 is a security/stability release fixing a critical Calamares
+    installer bug (sf-remove-live-user, see shadowfetch-branding 2.1.3-1) and a
+    first-boot-on-live-session bug (see shadowfetch-defaults 2.1.3-1).
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sun, 02 Aug 2026 10:22:06 -0400
+shadowfetch-meta (2.1.2-1) unstable; urgency=medium
+
+  * Stability release. No feature additions.
+  * Build is now reproducible: chroot and bootstrap mirrors are pinned to a
+    snapshot.debian.org timestamp. Tracking "testing" meant a rebuild of 2.1.1 did
+    not reproduce 2.1.1, and forky had already dropped network-manager-gnome, which
+    the core package list declares -- an unpinned build aborted outright.
+  * Encrypted installs can boot. sf-install-grub derived the target disk from
+    grub-probe on /, which on LUKS returns /dev/mapper/luks-<uuid>; the trailing-digit
+    strip then produced a device that does not exist and both grub-install calls
+    failed. The disk is now derived from the ESP, with the old path as a fallback.
+  * The live session no longer changes the visitor's machine or listens on port 22.
+    First-boot setup is guarded off live media, so it no longer sets the hardware
+    clock to local time on a machine nobody installed onto; ufw is enabled at build
+    time instead of after a Flatpak download; and sshd is stopped and masked on live
+    sessions, which shipped a published password with passwordless sudo.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Thu, 30 Jul 2026 10:47:33 -0400
+
+shadowfetch-meta (2.1.1-1) unstable; urgency=medium
+
+  * Correct the version the system reports about itself. The 2.1.0 image
+    identified as 2.0.1 in os-release, /etc/issue, the Calamares
+    installer branding, the SDDM theme and every helper tool: those all
+    derive from /usr/share/shadowfetch/version, which was a hand-
+    maintained literal nobody had bumped. The build now stamps it from
+    the Makefile, and the tools read it at runtime.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sun, 26 Jul 2026 17:05:03 -0400
+
+shadowfetch-meta (2.1.0-1) unstable; urgency=medium
+
+  * Rebuilt for the 2.1.0 release; members pinned to 2.1.0-1.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sun, 26 Jul 2026 05:06:13 -0400
+
+shadowfetch-meta (2.0.1-1) unstable; urgency=medium
+
+  * 2.0.1 — rebuild for the 2.0.1 image; no functional change in this
+    package.
+
+ -- Shadowfetch <signing@shadowfetch.com>  Fri, 24 Jul 2026 15:34:17 -0400
+
+shadowfetch-meta (2.0.0-1) unstable; urgency=medium
+
+  * 2.0.0 "Umbra" — Bedrock. Lockstep major release.
+  * shadowfetch-desktop: pin all five components to 2.0.0-1.
+  * Boot-to-snapshot resilience: shadowfetch-desktop now pulls the snapshot
+    stack (grub-btrfs) via shadowfetch-defaults recommends.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Tue, 21 Jul 2026 16:29:09 -0400
+
+shadowfetch-meta (1.9.0-1) unstable; urgency=medium
+
+  * Lockstep release for Shadowfetch Linux 1.9.0 "Command Center".
+  * Keep the ISO lean while making agent browser runtimes and sandboxes guided,
+    optional installs through the Control Center.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Sun, 12 Jul 2026 14:30:00 -0400
+
+shadowfetch-meta (1.8.1-1) unstable; urgency=medium
+
+  * Lockstep package alignment for the setup and agent refresh:
+    - Bump the desktop metapackages so exact-version package pins remain
+      satisfiable with shadowfetch-defaults and shadowfetch-welcome 1.8.1.
+    - Refresh package metadata to point at the real Shadowfetch Linux site.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 09 Jul 2026 14:10:00 -0400
+
+shadowfetch-meta (1.7.0-1) unstable; urgency=medium
+
+  * "Agent Ready" release - run a real autonomous AI agent on your own machine:
+    - Explicit choice of agent: Hermes (Nous Research's self-improving agent) or
+      OpenClaw, each set up in a single command. A new 'shadowfetch-agents' front
+      door and an "AI Agents - Get Started" menu entry walk you through it, and the
+      first-run Welcome wizard offers the same choice.
+    - Agent install guide shipped both in the OS
+      (/usr/share/doc/shadowfetch/AGENTS.md) and on the website (/linux/agents),
+      covering Hermes, OpenClaw and running everything 100% locally via Ollama.
+    - Agent-ready prerequisites baked in: Node.js, Python 3.13, git, ripgrep,
+      ffmpeg and now pipx, so agents install fast and offline-friendly.
+    - OpenClaw now actually runs out of the box: it needs Node 22+ (Debian ships
+      Node 20), so the helper provisions Node 22 LTS into your user account - no
+      root, system Node untouched - then installs and verifies it before launch.
+  * Stability and debug pass (broad audit, adversarially verified):
+    - Build fix: 'wsdd' was dropped from Debian trixie; replaced with 'wsdd2'.
+    - No more 'degraded' boot: snapper-cleanup.timer is enabled only when a btrfs
+      snapshot config exists, instead of unconditionally on live/non-btrfs systems.
+    - Wi-Fi: rfkill-unblock and regulatory-domain services now fire on the very
+      first boot rather than one boot late.
+    - Hardening: a locally-installed Ollama is pinned to localhost by a shipped
+      systemd drop-in, not only by the setup helper.
+    - Polish: branded menu icons for the agent tools, de-staled website roadmap
+      and verify pages, and the duplicate agent-picker menu entry retired.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 18 Jun 2026 09:30:00 -0400
+
+shadowfetch-meta (1.6.0-1) unstable; urgency=medium
+
+  * "Media & Identity" release - media-friendly, stable, and visually whole:
+    - Media out of the box: Haruna video player, Elisa music library, Kasts
+      podcasts, Spectacle screenshots, Kamoso webcam and MKVToolNix GUI join
+      VLC/mpv, with hardware video decoding enabled by default and correct
+      file associations for video, music and images.
+    - A real wallpaper collection: five new premium Umbra wallpapers (Gold,
+      Dusk, Ember, Graphite, Contour) in 4K and ultrawide, selectable in the
+      wallpaper picker and live-previewable from the welcome app.
+    - A continuous visual identity from power-on: refreshed GRUB and Plymouth
+      boot art, a branded user avatar, and a sharper terminal first-run look.
+    - Fixed defaults: audio files no longer point at an app that was not
+      installed; snapshot cleanup timer enabled for long-term stability.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Wed, 10 Jun 2026 00:22:09 -0400
+
+shadowfetch-meta (1.5.0-1) unstable; urgency=medium
+
+  * "Built for creators and builders" release:
+    - Creator audio stack baked in: EasyEffects (live mic cleanup, EQ,
+      noise-suppression) and pipewire-jack (pro-audio JACK bridge) alongside the
+      existing Ardour / Audacity / OBS / Kdenlive.
+    - Builder & developer tools: shellcheck, valgrind, direnv, hyperfine, yq,
+      podman-docker + podman-compose (docker CLI compatibility), input-remapper,
+      openssh-server, plus gcolor3 (colour picker) and xsane (scanning).
+    - New "Maker & hardware" one-click app category in the welcome app:
+      OrcaSlicer, PrusaSlicer, FreeCAD, KiCad and Arduino IDE; plus Scribus,
+      digiKam, GPU Screen Recorder, Kooha, Synfig, Zed, Ghostty, Beekeeper
+      Studio and Bruno added across the creative and developer sections.
+    - MS-compatible Carlito/Caladea fonts for faithful .docx/.pptx layout.
+  * Stress-test fixes:
+    - Fixed a blank /etc/os-release on installed systems (now generated from the
+      shipped version, so the OS identifies correctly to tools and scripts).
+    - Resolved a tuned vs power-profiles-daemon power-management conflict (KDE
+      uses power-profiles-daemon).
+    - Deduplicated the /boot/efi fstab entry, eliminating boot-time
+      systemd-fstab-generator errors on installed systems.
+    - Faster boot: NetworkManager-wait-online no longer blocks startup.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Sat, 06 Jun 2026 23:13:59 -0400
+
+shadowfetch-meta (1.4.0-1) unstable; urgency=medium
+
+  * Premium "made to feel like Pop" polish pass:
+    - Floating panel with a centered, curated creative-app dock
+      (Files, Firefox, Konsole, Krita, GIMP, Calibre, Shotcut).
+    - Refined window decorations (thin borders, clean Min/Max/Close set)
+      and tasteful effects: fade + scale on open, squash minimize, panel blur.
+    - Smoother animation timing; Inter Medium titlebars; crisp light hinting.
+    - New premium Umbra wallpaper (graphite + subtle gold) with matching
+      lock & login screens; gold app-grid menu icon.
+    - Branded Umbra login splash for a continuous boot-to-desktop arc.
+    - Kickoff favourites feature the creative apps front-and-centre.
+    - Flatpak apps now match the dark desktop (adw-gtk3-dark).
+    - Built-in tiling gaps; qt6-wayland for a clean Wayland session.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 04 Jun 2026 15:59:39 -0400
+
+shadowfetch-meta (1.3.1-1) unstable; urgency=medium
+
+  * Crowd-pleasing app update. Gaming out of the box (GameMode, MangoHud, vkBasalt, GOverlay) plus Steam, Heroic, Lutris and ProtonUp-Qt in the Welcome wizard. Richer one-click app catalogue organised by category (Telegram, Element, Zoom, Jellyfin, Plex, Joplin, Cryptomator, DBeaver and more). New baked tools: btop, Calibre, KeePassXC, Vorta backup, Czkawka, Meld, lazygit, Shotcut, HandBrake. The GPU-driver helper now handles brand-new cards gracefully and will not install a driver that cannot support them. Adds the expected bat/fd command names.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 04 Jun 2026 05:27:11 -0400
+
+shadowfetch-meta (1.3.0-1) unstable; urgency=medium
+
+  * Professional "made for work" release. One-click GPU driver setup (shadowfetch-gpu: NVIDIA branch detection + AMD/Intel). Broad baked graphics coverage (Mesa, Vulkan, VA-API/VDPAU hardware video acceleration for AMD+Intel) + X11 session. Wider WiFi firmware (MediaTek/Marvell/TI/ZyDAS/ath9k-htc) + powersave/regdomain/ASPM/coexistence fixes. Streamlined first-run onboarding wizard (Wi-Fi + GPU-driver + AI-agent steps unified). Crisp Bibata-Amber gold cursor + professional Plasma defaults.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Tue, 02 Jun 2026 21:18:58 -0400
+
+shadowfetch-meta (1.2.10-1) unstable; urgency=medium
+
+  * Lockstep bump for 1.2.10: universal GPT partition layout (bios_grub + ESP + btrfs root) so the installer boots on both UEFI and legacy BIOS.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Tue, 02 Jun 2026 14:41:24 -0400
+
+shadowfetch-meta (1.2.9-1) unstable; urgency=medium
+
+  * Lockstep version bump for the Shadowfetch Linux 1.2.9 "Snapshots & Rollback" release.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Tue, 02 Jun 2026 05:13:53 -0400
+
+shadowfetch-meta (1.2.8-1) unstable; urgency=medium
+
+  * Lockstep version bump for the Shadowfetch Linux 1.2.8 release.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Mon, 01 Jun 2026 07:19:46 -0400
+
+shadowfetch-meta (1.2.7-1) unstable; urgency=medium
+
+  * Lockstep version bump for the Shadowfetch Linux 1.2.7 release.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Sun, 31 May 2026 22:18:10 -0400
+
+shadowfetch-meta (1.2.6-1) unstable; urgency=medium
+
+  * Lockstep 1.2.6 (everyday apps added to the image: mpv, yt-dlp, syncthing, pdfarranger, qbittorrent, nodejs/npm, font-manager).
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Sun, 31 May 2026 12:41:29 -0400
+
+shadowfetch-meta (1.2.5-1) unstable; urgency=medium
+
+  * Lockstep version bump for the Shadowfetch Linux 1.2.5 release (TTY-banner version fix + stress-ng/fio diagnostics added to the image).
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Sun, 31 May 2026 05:25:46 -0400
+
+shadowfetch-meta (1.2.4-1) unstable; urgency=medium
+
+  * Lockstep version bump for the Shadowfetch Linux 1.2.4 release.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Sun, 31 May 2026 02:23:19 -0400
+
+shadowfetch-meta (1.2.3-1) unstable; urgency=medium
+
+  * Local AI: one-click Ollama + Gemma 3 + Llama 3.2 setup in the welcome wizard.
+  * Option to install the Nous Research Hermes Agent (shadowfetch-hermes).
+  * Added python3-pip, python3-venv, ripgrep.
+
+ -- Shadowfetch Project <maintainers@shadowfetch.example>  Sat, 30 May 2026 22:17:15 -0400
+
+shadowfetch-meta (1.2.2-1) unstable; urgency=medium
+
+  * QA + stress-test hardening pass (1.2.2).
+
+ -- Shadowfetch Project <maintainers@shadowfetch.example>  Sat, 30 May 2026 18:57:25 -0400
+
+shadowfetch-meta (1.2.1-1) unstable; urgency=medium
+
+  * Installer reliability: ext4 default (fixes btrfs+BIOS unbootable
+    installs caught in VM testing); clean Calamares hostname template;
+    installed-system Umbra GRUB theme; welcome-app default accent ->
+    Umbra gold.
+
+ -- Shadowfetch <signing@shadowfetch.com>  Sat, 30 May 2026 15:29:21 -0400
+
+shadowfetch-meta (1.2.0-1) unstable; urgency=medium
+
+  * Installable: Calamares graphical installer (Shadowfetch-branded,
+    Btrfs-default) makes the distro installable to disk; + Btrfs
+    snapshot tools (snapper, btrfs-assistant, btrfs-progs). Installer
+    config + Umbra branding shipped via includes.chroot over calamares-
+    settings-debian.
+
+ -- Shadowfetch <signing@shadowfetch.com>  Sat, 30 May 2026 14:07:51 -0400
+
+shadowfetch-meta (1.1.0-1) unstable; urgency=medium
+
+  * Local AI: full private-AI stack - shadowfetch-ai sets up Ollama +
+    Open-WebUI (ChatGPT-style web chat) via hardened podman, GPU-aware,
+    localhost-only + firewall-blocked + auth; menu launchers for Setup
+    and Web Chat. Plus KDE utility extras: filelight, kio-admin,
+    partitionmanager, kio-gdrive, kfind, kompare.
+
+ -- Shadowfetch <signing@shadowfetch.com>  Sat, 30 May 2026 12:18:27 -0400
+
+shadowfetch-meta (1.0.9-1) unstable; urgency=medium
+
+  * Quality of Life: printing/scanning (CUPS driverless+Epson+SANE
+    airscan), SMB shares (wsdd/avahi/kio-extras/filesharing), KDE
+    Connect (+firewall ports), MTP, NTFS/exFAT, dual-boot clock fix,
+    video/RAW thumbnails, RAR/zip, CJK+metric MS fonts, earlyoom, ZRAM
+    swappiness, 15s shutdown, journald cap, DNS fallback, I/O
+    schedulers, unattended security updates, Flatpak auto-update,
+    Baloo/numlock/clipboard/animation tuning,
+    brightnessctl/acpid/fprintd, and a private local-AI (Ollama) on-
+    ramp.
+
+ -- Shadowfetch <signing@shadowfetch.com>  Sat, 30 May 2026 11:17:53 -0400
+
+shadowfetch-meta (1.0.8-1) unstable; urgency=medium
+
+  * Polish & Protect: media codecs, Flathub in Discover, UFW firewall +
+    MAC randomization, IPv6 privacy, ZRAM, Bluetooth LDAC, GTK-dark +
+    font polish (Inter UI / Fira Code), nala/distrobox/podman, NVIDIA
+    suspend modprobe fix, first-boot setup service.
+
+ -- Shadowfetch <signing@shadowfetch.com>  Sat, 30 May 2026 10:13:48 -0400
+
+shadowfetch-meta (1.0.7-1) unstable; urgency=medium
+
+  * Umbra v2 visual identity (graphite + gold): recolored Plasma color
+    scheme with gold accent, new datacenter/graphite wallpapers, Konsole
+    Umbra scheme, gold Plymouth splash, GRUB boot-menu theme, and SDDM
+    login theme.
+
+ -- Shadowfetch <signing@shadowfetch.com>  Fri, 29 May 2026 21:35:40 -0400
+
+shadowfetch-meta (1.0.6-1) unstable; urgency=medium
+
+  * Version bump to 1.0.6 (lockstep with shadowfetch 1.0.6 release).
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Fri, 29 May 2026 20:08:11 -0400
+
+shadowfetch-meta (1.0.5-1) unstable; urgency=medium
+
+  * Version bump to 1.0.5 (lockstep with shadowfetch 1.0.5 release; keeps
+    shadowfetch-desktop = ${binary:Version} sibling pins satisfiable).
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Fri, 29 May 2026 10:53:23 -0400
+
+shadowfetch-meta (1.0.4-1) unstable; urgency=medium
+
+  * Bump version to 1.0.4.
+  * Integrate advanced layout selector (macOS/Windows workflows) in setup wizard.
+  * Pre-configure yabridge + Wine compatibility layers for Windows VSTs.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Tue, 26 May 2026 13:22:18 -0400
+
+shadowfetch-meta (1.0.3-1) unstable; urgency=medium
+
+  * Version bump to align meta sub-packages (shadowfetch-desktop,
+    shadowfetch-creative-base, shadowfetch-nvidia) with v1.0.3.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Sat, 23 May 2026 19:15:49 -0400
+
+shadowfetch-meta (1.0.2-1) unstable; urgency=medium
+
+  * Version bump to align meta sub-packages with v1.0.2 versions of
+    shadowfetch-themes/defaults/branding they Depend on.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Wed, 20 May 2026 07:00:00 +0000
+
+shadowfetch-meta (1.0.1-1) unstable; urgency=medium
+
+  * Version bump to align meta sub-packages with v1.0.1.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 19 May 2026 14:00:00 +0000
+
+shadowfetch-meta (1.0.0-1) unstable; urgency=medium
+
+  * Initial release of Shadowfetch Linux 1.0 "Umbra".
+  * KDE Plasma 6 base on Debian testing.
+  * Full creative workstation stack: GIMP, Krita, Inkscape, Blender,
+    darktable, RawTherapee, Ardour, Audacity, Kdenlive, OBS.
+  * NVIDIA proprietary driver baked in with first-boot autodetection.
+  * Shadowfetch dark theme and signature accent.
+  * First-boot welcome experience.
+
+ -- Shadowfetch Project <maintainers@shadowfetch.example>  Mon, 18 May 2026 00:00:00 +0000

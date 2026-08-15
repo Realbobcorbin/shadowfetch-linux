@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# The sfcc modules are data files installed under /usr/share/shadowfetch,
+# not a Python distribution: no dist-info, nothing on the default sys.path,
+# so dh_python3 has nothing to do and byte-compilation is left to runtime
+# (__pycache__ under /usr/share is not shipped and not generated at build).
+override_dh_python3:

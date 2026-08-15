@@ -1,0 +1,3 @@
+# Shadowfetch is the distribution defaults package; these files intentionally
+# seed new local accounts and do not rewrite existing users' configurations.
+shadowfetch-defaults: package-contains-file-in-etc-skel *

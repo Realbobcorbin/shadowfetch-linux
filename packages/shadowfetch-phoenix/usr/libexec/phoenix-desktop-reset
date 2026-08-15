@@ -1,0 +1,123 @@
+#!/bin/sh
+# phoenix-desktop-reset - reset the Plasma desktop without touching personal
+# files. Part of Shadowfetch Linux 2.1.2 "Fire Edition".
+#
+# User-scope, no root, no polkit. Moves a CURATED list of Plasma 6
+# configuration files to a timestamped backup directory and restarts
+# plasmashell. Undoable by construction: --undo moves them back. Documents,
+# pictures, mail, browser profiles, application data - untouched, and not
+# even on the list.
+
+set -u
+
+VERSION_FILE=/usr/share/shadowfetch/version
+BACKUP_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/shadowfetch/desktop-reset"
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+# The curated list. Files are relative to $CFG; kdedefaults is a directory.
+CURATED="plasma-org.kde.plasma.desktop-appletsrc
+plasmashellrc
+kwinrc
+kwinrulesrc
+kglobalshortcutsrc
+plasmarc
+kscreenlockerrc
+ksmserverrc
+kdedefaults"
+
+usage() {
+    cat <<'SFHELP'
+phoenix-desktop-reset - reset the Plasma desktop, personal files untouched.
+
+USAGE
+  phoenix-desktop-reset            move the curated Plasma config list to a
+                                   timestamped backup and restart plasmashell
+  phoenix-desktop-reset --list     show exactly which files would be reset
+  phoenix-desktop-reset --undo DIR restore a previous backup (DIR as printed
+                                   at reset time, or a name under
+                                   ~/.local/share/shadowfetch/desktop-reset/)
+
+Only desktop layout/settings files are touched. Documents, pictures, mail,
+browser data and application data are not on the list.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+}
+
+restart_shell() {
+    # Prefer the systemd user unit; fall back to the classic pair.
+    if systemctl --user restart plasma-plasmashell.service 2>/dev/null; then
+        return 0
+    fi
+    if command -v kquitapp6 >/dev/null 2>&1; then
+        kquitapp6 plasmashell 2>/dev/null || true
+    fi
+    if command -v kstart >/dev/null 2>&1; then
+        (kstart plasmashell >/dev/null 2>&1 &) || true
+    elif command -v plasmashell >/dev/null 2>&1; then
+        (setsid plasmashell >/dev/null 2>&1 &) || true
+    fi
+    return 0
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  --version)
+    echo "phoenix-desktop-reset (Shadowfetch Linux) $(cat "$VERSION_FILE" 2>/dev/null || echo unknown)"; exit 0 ;;
+  --list)
+    echo "phoenix-desktop-reset would move these (if present) out of $CFG:"
+    for f in $CURATED; do
+        if [ -e "$CFG/$f" ]; then echo "  $f"; else echo "  $f (not present)"; fi
+    done
+    exit 0 ;;
+  --undo)
+    src="${2:-}"
+    [ -n "$src" ] || { echo "phoenix-desktop-reset: --undo needs a backup directory" >&2; exit 2; }
+    # Accept either a full path or a name under the backup root.
+    [ -d "$src" ] || src="$BACKUP_ROOT/$src"
+    [ -d "$src" ] || { echo "phoenix-desktop-reset: no such backup: $src" >&2; exit 1; }
+    restored=0
+    for f in $CURATED; do
+        if [ -e "$src/$f" ]; then
+            rm -rf "${CFG:?}/$f"
+            mv "$src/$f" "$CFG/$f"
+            restored=$((restored + 1))
+        fi
+    done
+    rmdir "$src" 2>/dev/null || true
+    echo "phoenix-desktop-reset: restored $restored item(s) from $src"
+    restart_shell
+    exit 0 ;;
+  '') ;;
+  *) usage >&2; exit 2 ;;
+esac
+
+if [ "$(id -u)" -eq 0 ]; then
+    echo "phoenix-desktop-reset: refusing to run as root - run as the desktop user" >&2
+    exit 1
+fi
+
+ts=$(date +%Y%m%d-%H%M%S)
+dest="$BACKUP_ROOT/$ts"
+mkdir -p "$dest"
+
+moved=0
+for f in $CURATED; do
+    if [ -e "$CFG/$f" ]; then
+        mv "$CFG/$f" "$dest/$f"
+        moved=$((moved + 1))
+    fi
+done
+
+if [ "$moved" -eq 0 ]; then
+    rmdir "$dest" 2>/dev/null || true
+    echo "phoenix-desktop-reset: nothing to reset - the desktop is already at defaults"
+    exit 0
+fi
+
+echo "phoenix-desktop-reset: moved $moved item(s) to:"
+echo "  $dest"
+echo "Undo any time with:  phoenix-desktop-reset --undo $ts"
+
+restart_shell
+exit 0

@@ -1,0 +1,62 @@
+shadowfetch-fireproof (2.1.4-1) umbra; urgency=medium
+
+  * Rebuild Fireproof update analysis for the 2.1.4 Fire Edition.
+  * Use one standards-compliant main launcher category to avoid duplicates.
+  * Use current polkitd and pkexec dependencies and Debian's systemd
+    maintainer helper for the PackageKit offline-update mask.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sat, 08 Aug 2026 11:32:00 -0400
+
+shadowfetch-fireproof (2.1.3-1) unstable; urgency=high
+
+  * Version bump to match the 2.1.3 release. No functional changes in this
+    package. 2.1.3 is a security/stability release fixing a critical Calamares
+    installer bug (sf-remove-live-user, see shadowfetch-branding 2.1.3-1) and a
+    first-boot-on-live-session bug (see shadowfetch-defaults 2.1.3-1).
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sun, 02 Aug 2026 10:22:06 -0400
+shadowfetch-fireproof (2.1.2-1) unstable; urgency=medium
+
+  * Initial release, for Shadowfetch Linux 2.1.2 "Fire Edition".
+  * Analyze is side-effect free: opening the update screen takes no apt
+    lock and downloads nothing. The upgrade is simulated on a read-only
+    python3-apt cache (same libapt-pkg as apt, so the answer is
+    identical), with a kept-back story from the safe-upgrade diff, holds
+    shown as "pinned, will not update", and libfoo1 -> libfoo1t64 pairs
+    collapsed to one "same library, new name" line.
+  * The dpkg frontend lock is taken only at commit, and the simulation is
+    re-run under it: if the archive moved since the user read the list,
+    the lock is released and analyze re-renders instead of installing
+    something nobody approved. Idling on the analyze screen holds nothing
+    against Discover or terminal apt.
+  * Zero Fireproof snapshots: snapper's shipped 80snapper apt hooks (and
+    Phoenix's 79phoenix-space) wrap the commit. Fireproof records the
+    highest snapper number beforehand, names the FIRST type=pre snapshot
+    of the transaction as the rollback target, and relabels it with
+    fireproof=pre,txn=<uuid> userdata so the Phoenix panel and the boot
+    menu agree on the Point.
+  * Post-update verify battery, headless and in seconds: dpkg --audit,
+    apt -f consistency, initrd freshness per new kernel, grub.cfg, dkms
+    module state (the black-screen preventer with nvidia-kernel-dkms),
+    systemctl --failed diffed against a pre-commit baseline, needrestart,
+    default route + mirror resolution, and a WARN-only graphics scan - a
+    graphical login is never claimed before a reboot.
+  * First-boot-after-update protocol: a pending flag written before the
+    reboot offer, cleared by fireproof-postboot.service when a real
+    graphical session appears (120 s fallback timer for boots that never
+    get there). A failed boot opens recovery preselecting the recorded
+    pre-Point, and an /etc/issue.d drop-in prints the exact
+    phoenix-restore command for the no-GUI case.
+  * Rollback carousel closed: the package-set hash of any rolled-back or
+    verify-failed transaction is recorded; the same pending set
+    re-analyzes with the default flipped to Don't proceed and its login
+    notification suppressed. A different set clears the match naturally.
+  * Update ownership: DiscoverNotifier hidden for new users by the
+    live-build skel override (owned by the ISO, not this package),
+    packagekit-offline-update.service masked as a backstop,
+    APT::Periodic refreshes package lists only - nothing downloads or
+    installs unattended, ever. The session autostart check posts the
+    proactive login notification when updates are pending and the
+    rollback carousel has not suppressed it.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 30 Jul 2026 12:00:00 -0400

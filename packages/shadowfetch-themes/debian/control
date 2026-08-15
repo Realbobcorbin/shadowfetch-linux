@@ -1,0 +1,21 @@
+Source: shadowfetch-themes
+Section: x11
+Priority: optional
+Maintainer: Shadowfetch Project <maintainers@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://shadowfetch.com/linux/
+
+Package: shadowfetch-themes
+Architecture: all
+Depends:
+ ${misc:Depends},
+ plasma-workspace,
+ breeze,
+ papirus-icon-theme
+Recommends: kde-style-breeze
+Description: Shadowfetch dark color scheme and look-and-feel
+ Ships the Shadowfetch Dark KDE color scheme (signature violet accent
+ on near-black background) and a minimal Plasma look-and-feel package
+ (org.shadowfetch.dark) that bundles the scheme with sensible Plasma
+ defaults: Breeze widgets, Papirus-Dark icons, breeze-dark plasma theme.

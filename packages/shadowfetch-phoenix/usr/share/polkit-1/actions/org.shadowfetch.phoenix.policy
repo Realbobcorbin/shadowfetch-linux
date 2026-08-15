@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>Shadowfetch Project</vendor>
+  <vendor_url>https://shadowfetch.com/linux/</vendor_url>
+
+  <!-- Restoring a Point swaps the system root subvolume: a real system
+       mutation, so it always authenticates as admin. auth_admin_keep lets
+       the Phoenix panel run a restore plus its follow-ups in one grant. -->
+  <action id="org.shadowfetch.phoenix.restore">
+    <description>Restore a Phoenix Point as the permanent system root</description>
+    <message>Authentication is required to restore a Phoenix Point</message>
+    <icon_name>shadowfetch</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/phoenix-restore</annotate>
+  </action>
+
+  <!-- The recovery report reads root-only logs and SMART data. It writes a
+       local tarball and uploads nothing. -->
+  <action id="org.shadowfetch.phoenix.recovery-report">
+    <description>Export a privacy-safe Phoenix recovery report</description>
+    <message>Authentication is required to export a recovery report</message>
+    <icon_name>shadowfetch</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/phoenix-recovery-report</annotate>
+  </action>
+</policyconfig>

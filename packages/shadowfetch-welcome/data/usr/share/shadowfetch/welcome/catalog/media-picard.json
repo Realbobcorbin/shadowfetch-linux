@@ -1,0 +1,13 @@
+{
+  "id": "media-picard",
+  "name": "MusicBrainz Picard",
+  "kind": "apt",
+  "packages": ["picard"],
+  "url": "",
+  "sha256": "",
+  "size_bytes": 1600000,
+  "license": "GPL-2.0-or-later",
+  "min_ram_gb": 0,
+  "requires": ["none"],
+  "blurb": "Automatic music tagging and organisation - identifies albums by acoustic fingerprint and fills tags from the MusicBrainz database when you ask it to. About 1.6 MB to download, 10 MB installed; measured exactly at ISO build time."
+}

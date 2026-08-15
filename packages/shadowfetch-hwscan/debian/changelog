@@ -1,0 +1,45 @@
+shadowfetch-hwscan (2.1.4-1) umbra; urgency=medium
+
+  * Rebuild hardware capability reporting for the new graphics setup flow and
+    Buzz-native model selection.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sat, 08 Aug 2026 11:32:00 -0400
+
+shadowfetch-hwscan (2.1.3-1) unstable; urgency=high
+
+  * Version bump to match the 2.1.3 release. No functional changes in this
+    package. 2.1.3 is a security/stability release fixing a critical Calamares
+    installer bug (sf-remove-live-user, see shadowfetch-branding 2.1.3-1) and a
+    first-boot-on-live-session bug (see shadowfetch-defaults 2.1.3-1).
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sun, 02 Aug 2026 10:22:06 -0400
+shadowfetch-hwscan (2.1.2-1) unstable; urgency=medium
+
+  * New component for 2.1.2 "Fire Edition": the hardware + AI
+    compatibility scanner.
+  * /usr/libexec/shadowfetch-hwscan: unprivileged reads only (sysfs,
+    /proc, pci.ids) plus exactly two time-boxed subprocesses
+    (vulkaninfo --json, nvidia-smi; 3 s each, failure -> "unknown").
+    No polkit anywhere; works from the live session and from Ignition.
+  * Honest VRAM split: AMD measured from sysfs, Intel iGPUs "share
+    system RAM" and never get a number, NVIDIA post-driver measured via
+    the nvidia-smi CSV pattern (no NVML bindings), Vulkan heap sums
+    labeled "estimated", everything else "unknown" with the copy
+    "VRAM: measured after driver install". Software rasterizers
+    (llvmpipe/swrast) can never masquerade as a GPU estimate.
+  * Deterministic recommendation table with the judge folds applied:
+    physical cores below 6 downgrade every class above Whisper by one
+    tier on CPU paths ("slower processor - expect well below typical
+    speeds"); the founder's "comfortably run 7B" sentence is reserved
+    for tiers with 8 GB+ VRAM full offload, and 16 GB CPU-only machines
+    get the honest "relaxed pace" line instead; "reduced context or
+    quantization" always carries its plain-words gloss.
+  * shadowfetch-hwscan.service (oneshot, hardened, IPAddressDeny=any)
+    writes world-readable /var/lib/shadowfetch/hwscan.json each boot;
+    the firstboot GPU flow restarts it after a driver install so
+    estimated/unknown flips to measured.
+  * 47 fixture-pinned unit tests (rule table rows including the
+    low-core and 16 GB-CPU wording rows, both vulkaninfo layouts,
+    nvidia-smi CSV, sysfs trees, exact JSON schema) run at build time.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 30 Jul 2026 12:00:00 -0400

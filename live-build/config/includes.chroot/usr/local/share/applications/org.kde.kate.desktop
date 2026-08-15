@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=Kate
+# Shadowfetch launcher cleanup: GenericName renamed from "Advanced Text
+# Editor" to plain "Text Editor", with one main category so Kate files under
+# Develop without a duplicate Utility entry.
+GenericName=Text Editor
+Comment=KDE Advanced Text Editor
+Exec=kate -b %U
+TryExec=kate
+Icon=kate
+Terminal=false
+Categories=Qt;KDE;Development;
+MimeType=text/plain;
+InitialPreference=9
+StartupNotify=true
+StartupWMClass=kate
+X-DBUS-StartupType=Multi
+X-DocPath=kate/index.html
+Keywords=text;editor;kde;programming;development;

@@ -1,0 +1,19 @@
+{
+  "id": "preset-colour-calibration",
+  "name": "Colour calibration (Argyll)",
+  "kind": "preset",
+  "packages": [
+    "argyll",
+    "argyll-ref",
+    "displaycal"
+  ],
+  "url": "",
+  "sha256": "",
+  "size_bytes": 130000000,
+  "license": "AGPL-3.0",
+  "min_ram_gb": 0,
+  "requires": [
+    "none"
+  ],
+  "blurb": "Profile and calibrate a display or printer with a colorimeter. Part of the Photography workflow; install it when you have the hardware."
+}

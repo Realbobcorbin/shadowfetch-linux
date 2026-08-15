@@ -1,0 +1,25 @@
+{
+ "$schema": "https://schema.khronos.org/vulkan/profiles-0.8-latest.json",
+ "capabilities": {
+  "device": {
+   "VkPhysicalDeviceProperties": {
+    "deviceName": "NVIDIA GeForce RTX 3060 (NVK GA106)",
+    "deviceType": "VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
+    "vendorID": "0x10de",
+    "deviceID": "0x2504"
+   },
+   "VkPhysicalDeviceMemoryProperties": {
+    "memoryHeaps": [
+     {
+      "size": "12884901888",
+      "flags": 1
+     },
+     {
+      "size": "8589934592",
+      "flags": 0
+     }
+    ]
+   }
+  }
+ }
+}

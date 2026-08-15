@@ -1,0 +1,28 @@
+{
+  "id": "ignition-developer",
+  "name": "Developer",
+  "kind": "preset",
+  "packages": [
+    "git",
+    "build-essential",
+    "python3-venv",
+    "nodejs",
+    "npm",
+    "podman",
+    "podman-compose",
+    "distrobox",
+    "kdevelop",
+    "kdevelop-data",
+    "sqlitebrowser",
+    "postgresql-client",
+    "pgcli"
+  ],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 60000000,
+  "license": "Free software (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "ignition",
+  "blurb": "Git, compilers, Python virtual environments, Node.js and npm, containers with Podman and Distrobox, KDevelop, DB Browser for SQLite and the PostgreSQL clients. Kate and Konsole are already on your system."
+}

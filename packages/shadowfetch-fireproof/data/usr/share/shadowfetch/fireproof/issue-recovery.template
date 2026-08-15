@@ -1,0 +1,10 @@
+
+  Shadowfetch Fireproof: the last system update did not come back up.
+
+  Your system is protected by Phoenix Point @POINT@ (taken automatically
+  before that update). To roll back from this console:
+
+      pkexec /usr/libexec/phoenix-restore @POINT@
+
+  then reboot. Personal files are not touched by a restore.
+

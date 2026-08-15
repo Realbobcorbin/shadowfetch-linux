@@ -1,0 +1,143 @@
+#!/bin/sh
+# ember-duration - the pkexec root helper behind the Ember duration picker
+# and the Control Center app-profile cards.
+#
+# This is THE single root-write path for Ember session state (IA judge
+# fold: "the /run writer is named").  Session QML never writes root
+# paths; it calls:
+#
+#     pkexec /usr/libexec/ember-duration 7200            # Ember for 2 h
+#     pkexec /usr/libexec/ember-duration off             # no time limit
+#     pkexec /usr/libexec/ember-duration --profile gaming
+#     pkexec /usr/libexec/ember-duration --profile local-ai 7200
+#     pkexec /usr/libexec/ember-duration --profile off
+#
+# "For N hours" is a RuntimeMaxSec runtime drop-in on
+# shadowfetch-ember.service, enforced by pid 1 -- if emberd hangs or the
+# session dies, pid 1 still stops the unit and ExecStopPost restores
+# Balanced.  The drop-in lives on tmpfs and is removed by ember-restore
+# on the stop path, so a time limit never leaks into the next arm.
+#
+# --profile atomically writes /run/shadowfetch/ember-profile (root:root,
+# tmpfs).  Ids are validated against the root-owned profile definitions
+# in /usr/share/shadowfetch/ember/profiles/ -- free-form arguments are
+# refused, same rule as every other Shadowfetch privileged helper.
+# ember-restore clears the marker in the same pass that undoes
+# ember.state.
+set -u
+
+# ---- --help / --version, BEFORE any side effect -----------------------------
+case "${1:-}" in
+  -h|--help)
+    cat <<'SFHELP'
+ember-duration - set the Ember Mode time limit and app-profile marker (root helper).
+
+USAGE
+  ember-duration <seconds>                time-limit Ember (60..86400)
+  ember-duration off                      remove the time limit
+  ember-duration --profile <id>           mark an app profile active
+  ember-duration --profile off            clear the app-profile marker
+  ember-duration --profile <id> <seconds> both, in one authentication
+
+Called by the Shadowfetch Control Center via pkexec
+(action com.shadowfetch.ember.duration). Everything it writes lives on
+tmpfs and is undone by ember-restore or by a reboot.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+    exit 0 ;;
+  --version)
+    echo "ember-duration (Shadowfetch Linux) $(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"
+    exit 0 ;;
+esac
+
+die() {
+    echo "ember-duration: $*" >&2
+    exit 1
+}
+
+if [ "$(id -u)" != "0" ]; then
+    die "must run as root (invoke via pkexec)"
+fi
+
+RUNDIR=/run/shadowfetch
+PROFILE_FILE=$RUNDIR/ember-profile
+PROFILES_DIR=/usr/share/shadowfetch/ember/profiles
+DROPDIR=/run/systemd/system/shadowfetch-ember.service.d
+DROPIN=$DROPDIR/50-ember-duration.conf
+
+profile=""
+duration=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --profile)
+            shift
+            [ $# -gt 0 ] || die "--profile needs an id (or 'off')"
+            profile=$1
+            [ -n "$profile" ] || die "--profile needs an id (or 'off')"
+            ;;
+        off)
+            duration=off
+            ;;
+        *[!0-9]*)
+            die "unrecognised argument: $1 (see --help)"
+            ;;
+        *)
+            duration=$1
+            ;;
+    esac
+    shift
+done
+
+[ -n "$profile" ] || [ -n "$duration" ] || die "nothing to do (see --help)"
+
+# ---- time limit -------------------------------------------------------------
+if [ -n "$duration" ]; then
+    if [ "$duration" = "off" ]; then
+        if [ -e "$DROPIN" ]; then
+            rm -f "$DROPIN"
+            rmdir "$DROPDIR" 2>/dev/null || true
+            systemctl daemon-reload >/dev/null 2>&1 || true
+        fi
+        echo "ember-duration: time limit removed"
+    else
+        # 1 minute to 24 hours.  Anything longer is "no limit" and the
+        # UI offers 'off' for that.
+        if [ "$duration" -lt 60 ] || [ "$duration" -gt 86400 ]; then
+            die "duration must be between 60 and 86400 seconds"
+        fi
+        mkdir -p "$DROPDIR"
+        tmp=$(mktemp "$DROPDIR/.50-ember-duration.XXXXXX") || die "mktemp failed"
+        printf '# Written by ember-duration; removed by ember-restore on stop.\n[Service]\nRuntimeMaxSec=%s\n' \
+            "$duration" > "$tmp"
+        chmod 0644 "$tmp"
+        mv -f "$tmp" "$DROPIN"
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        echo "ember-duration: Ember will return to Balanced after ${duration}s"
+    fi
+fi
+
+# ---- app-profile marker -----------------------------------------------------
+if [ -n "$profile" ]; then
+    if [ "$profile" = "off" ]; then
+        rm -f "$PROFILE_FILE"
+        echo "ember-duration: app-profile marker cleared"
+    else
+        case "$profile" in
+            *[!a-z0-9-]*)
+                die "profile ids are lower-case letters, digits and dashes" ;;
+        esac
+        # Ids resolve only against root-owned profile definitions
+        # (shipped by shadowfetch-control-center); no free-form input.
+        [ -f "$PROFILES_DIR/$profile.conf" ] || die "unknown profile: $profile"
+        mkdir -p "$RUNDIR"
+        tmp=$(mktemp "$RUNDIR/.ember-profile.XXXXXX") || die "mktemp failed"
+        printf '%s\n' "$profile" > "$tmp"
+        chmod 0644 "$tmp"
+        mv -f "$tmp" "$PROFILE_FILE"
+        echo "ember-duration: app profile '$profile' marked active"
+    fi
+fi
+
+exit 0

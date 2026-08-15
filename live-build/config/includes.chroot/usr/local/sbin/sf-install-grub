@@ -1,0 +1,111 @@
+#!/bin/sh
+# Shadowfetch firmware-native bootloader installer. It runs in the target
+# chroot through Calamares and installs only the bootloader for the firmware
+# mode used to start the installer.
+export PATH=/usr/sbin:/sbin:/usr/bin:/bin
+exec >/var/log/sf-install-grub.log 2>&1
+set -x
+RC=0
+GRUB_PC_DIR=/usr/share/shadowfetch/installer-packages
+GRUB_PC_DEB=$GRUB_PC_DIR/grub-pc.deb
+GRUB_PC_SHA=$GRUB_PC_DIR/grub-pc.deb.sha256
+
+# Resolve a partition or mapper stack to the physical disk at the root of its
+# lsblk dependency tree. findmnt may append a Btrfs subvolume such as [/@].
+physical_disk_for() {
+  node=${1%%\[*}
+  case "$node" in
+    /dev/*) ;;
+    *) return 1 ;;
+  esac
+  name=$(lsblk -s -nro NAME "$node" 2>/dev/null | tail -n1 | tr -d ' ')
+  [ -n "$name" ] || return 1
+  disk="/dev/$name"
+  [ -b "$disk" ] || return 1
+  [ "$(lsblk -dnro TYPE "$disk" 2>/dev/null)" = "disk" ] || return 1
+  printf '%s\n' "$disk"
+}
+
+DISK=""
+for mountpoint in /boot/efi /boot /; do
+  source=$(findmnt -no SOURCE "$mountpoint" 2>/dev/null || true)
+  candidate=$(physical_disk_for "$source" || true)
+  if [ -n "$candidate" ]; then
+    DISK=$candidate
+    break
+  fi
+done
+if [ -z "$DISK" ] || [ ! -b "$DISK" ]; then
+  echo "ERROR: could not resolve the installation disk from /boot/efi, /boot or /"
+  exit 1
+fi
+
+if [ -d /sys/firmware/efi ]; then
+  FIRMWARE=UEFI
+  if [ "$(dpkg-query -W -f='${db:Status-Status}' grub-efi-amd64 2>/dev/null || true)" != "installed" ]; then
+    echo "ERROR: the UEFI GRUB maintenance package is not installed"
+    exit 1
+  fi
+  grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --no-nvram --recheck || RC=1
+else
+  FIRMWARE=BIOS
+  if [ ! -f "$GRUB_PC_DEB" ] || [ ! -f "$GRUB_PC_SHA" ]; then
+    echo "ERROR: the offline BIOS GRUB package is missing"
+    exit 1
+  fi
+  if ! (cd "$GRUB_PC_DIR" && sha256sum --check grub-pc.deb.sha256); then
+    echo "ERROR: the offline BIOS GRUB package checksum is invalid"
+    exit 1
+  fi
+
+  GRUB_PC_PACKAGE=$(dpkg-deb --field "$GRUB_PC_DEB" Package)
+  GRUB_PC_VERSION=$(dpkg-deb --field "$GRUB_PC_DEB" Version)
+  GRUB_PC_ARCH=$(dpkg-deb --field "$GRUB_PC_DEB" Architecture)
+  GRUB_PC_BIN_VERSION=$(dpkg-query -W -f='${Version}' grub-pc-bin)
+  NATIVE_ARCH=$(dpkg --print-architecture)
+  if [ "$GRUB_PC_PACKAGE" != "grub-pc" ] || [ "$GRUB_PC_VERSION" != "$GRUB_PC_BIN_VERSION" ] || [ "$GRUB_PC_ARCH" != "$NATIVE_ARCH" ]; then
+    echo "ERROR: the offline BIOS GRUB package does not match the installed GRUB binaries"
+    exit 1
+  fi
+
+  printf '%s\n' \
+    "grub-pc grub-pc/install_devices multiselect $DISK" \
+    "grub-pc grub-pc/install_devices_empty boolean false" \
+    | debconf-set-selections
+  if ! dpkg --remove grub-efi-amd64; then
+    echo "ERROR: could not remove the UEFI GRUB maintenance package on BIOS"
+    exit 1
+  fi
+  if ! DEBIAN_FRONTEND=noninteractive dpkg --install "$GRUB_PC_DEB"; then
+    echo "ERROR: could not activate the BIOS GRUB maintenance package offline"
+    exit 1
+  fi
+  if [ "$(dpkg-query -W -f='${db:Status-Status}' grub-pc 2>/dev/null || true)" != "installed" ]; then
+    echo "ERROR: the BIOS GRUB maintenance package is not installed"
+    exit 1
+  fi
+  if [ "$(dpkg-query -W -f='${db:Status-Status}' grub-efi-amd64 2>/dev/null || true)" = "installed" ]; then
+    echo "ERROR: the UEFI GRUB maintenance package remains installed on BIOS"
+    exit 1
+  fi
+  grub-install --target=i386-pc --recheck "$DISK" || RC=1
+fi
+echo "sf-install-grub: firmware=$FIRMWARE disk=$DISK"
+
+# Normalize the /boot/efi fstab entry as a final integrity check. Strip every
+# /boot/efi line and any malformed (<4 field) line, then write exactly one entry
+# for the ESP GRUB used. BIOS installs have no ESP, so this block is skipped.
+EFI_UUID=$(findmnt -no UUID /boot/efi 2>/dev/null | head -n1 | tr -d "[:space:]")
+if [ -n "$EFI_UUID" ]; then
+  awk 'NF>=4 && $2!="/boot/efi"' /etc/fstab > /etc/fstab.sf
+  printf "UUID=%s\t/boot/efi\tvfat\tumask=0077,shortname=winnt\t0\t2\n" "$EFI_UUID" >> /etc/fstab.sf
+  mv /etc/fstab.sf /etc/fstab
+  echo "sf-install-grub: normalized /boot/efi fstab -> UUID=$EFI_UUID"
+fi
+
+update-grub || RC=1
+if [ "$RC" -eq 0 ]; then
+  rm -rf "$GRUB_PC_DIR"
+fi
+echo "sf-install-grub RC=$RC"
+exit $RC

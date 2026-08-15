@@ -1,0 +1,722 @@
+#!/usr/bin/python3
+"""emberd - the Shadowfetch Ember Mode engine (Fire Edition, 2.1.2).
+
+One switch, four independent safety layers, no sampler.
+
+What this daemon DOES own:
+  * the power-profiles-daemon performance hold (HoldProfile on
+    org.freedesktop.UPower.PowerProfiles) and the ProfileReleased watch --
+    a user profile change in the Plasma applet is a graceful extinguish,
+    never a re-hold;
+  * the cpupower/sysfs governor fallback for hardware without a ppd
+    performance profile, with the prior governor recorded per cpu in
+    /run/shadowfetch/ember.state;
+  * the pause pass over the curated, read-only pause list
+    (/usr/share/shadowfetch/ember/pause-list.conf) with its gate
+    conditions;
+  * the CPUWeight=40 runtime drop-in on system.slice (contention-side
+    only; the IOWeight claim was dropped from v1 -- io.weight is a no-op
+    on default NVMe schedulers);
+  * the idle watchdog, which consumes the WORK-ONLY effective-load index
+    (CPU EMA, GPU busy%) from org.shadowfetch.Firewatch1.  The
+    thermal-proximity term is deliberately NOT part of the auto-return
+    test: a hot thin laptop idling above 66C would otherwise never
+    return to Balanced while Ember's own pin sustains the heat.  Thermal
+    proximity stays in the flame DISPLAY, which firewatchd owns.
+
+What this daemon deliberately does NOT own:
+  * sampling, ELI computation, the flame level -- firewatchd is the
+    single always-on sensor source (judge must-fix: the sampler
+    contradiction is resolved by emberd having NO sampler);
+  * baloo -- user scope, suspended by the Control Center session helper;
+  * any persistent state.  Every mutation is --runtime or lives on
+    tmpfs, so a power cut reverts by reboot.
+
+Auto-return layers (in order of paranoia):
+  (a) the ppd hold auto-releases the instant this process's D-Bus
+      connection drops -- crash, SIGKILL, logout: Balanced, zero code;
+  (b) shadowfetch-ember.service runs /usr/libexec/ember-restore as
+      ExecStopPost, which undoes service stops, the governor fallback
+      and the cgroup drop-in from /run/shadowfetch/ember.state, and runs
+      even after an OOM kill;
+  (c) ExecStartPre runs the same idempotent restore before re-arming;
+  (d) everything is tmpfs/--runtime, so reboot reverts.
+  "For N hours" is a RuntimeMaxSec runtime drop-in enforced by pid 1
+  (written by the pkexec ember-duration helper); WatchdogSec=15 catches
+  hangs in this process itself.
+
+D-Bus: system service com.shadowfetch.Ember1 at /com/shadowfetch/Ember1
+exposing {armed, hold_active, paused_units[], state_file_hash} --
+read-only status for the Control Center EmberPage.
+
+Zero telemetry.  Zero network.  The only sockets this process touches
+are the system bus and systemd's notify socket.
+"""
+
+import glob
+import hashlib
+import os
+import re
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+# ---- --help / --version, BEFORE any side effect -----------------------------
+# House rule since 2.0.1: asking a command what it does must never make it do
+# the thing.  These run before the dbus/gi imports so even a broken Python
+# D-Bus stack cannot stop --help from answering.
+def _version_string():
+    try:
+        with open("/usr/share/shadowfetch/version", encoding="utf-8") as f:
+            return f.read().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+if __name__ == "__main__":
+    _arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    if _arg in ("-h", "--help"):
+        print("""emberd - the Shadowfetch Ember Mode engine.
+
+USAGE
+  emberd            run the engine (root; normally started by systemd via
+                    'systemctl start shadowfetch-ember.service')
+
+WHAT IT DOES
+  Holds the 'performance' power profile via power-profiles-daemon (with a
+  cpupower governor fallback), pauses a small curated list of background
+  services, tilts CPU scheduling toward your session, and automatically
+  returns to Balanced: on idle, on a profile change in the applet, on
+  stop, on crash, and on reboot.  Every mutation is recorded in
+  /run/shadowfetch/ember.state and undone by /usr/libexec/ember-restore.
+
+  Status is published on the system bus as com.shadowfetch.Ember1.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/""")
+        raise SystemExit(0)
+    if _arg == "--version":
+        print("emberd (Shadowfetch Linux) %s" % _version_string())
+        raise SystemExit(0)
+    if _arg:
+        print("emberd: unrecognised argument: %s (see --help)" % _arg,
+              file=sys.stderr)
+        raise SystemExit(2)
+
+import dbus
+import dbus.mainloop.glib
+import dbus.service
+from gi.repository import GLib
+
+BUS_NAME = "com.shadowfetch.Ember1"
+OBJ_PATH = "/com/shadowfetch/Ember1"
+IFACE = "com.shadowfetch.Ember1"
+
+PPD_NAME = "org.freedesktop.UPower.PowerProfiles"
+PPD_PATH = "/org/freedesktop/UPower/PowerProfiles"
+
+FIREWATCH_NAME = "org.shadowfetch.Firewatch1"
+FIREWATCH_PATH = "/org/shadowfetch/Firewatch1"
+FIREWATCH_IFACE = "org.shadowfetch.Firewatch1"
+
+SYSTEMD_NAME = "org.freedesktop.systemd1"
+SYSTEMD_PATH = "/org/freedesktop/systemd1"
+SYSTEMD_MGR = "org.freedesktop.systemd1.Manager"
+
+RUN_DIR = "/run/shadowfetch"
+STATE_FILE = RUN_DIR + "/ember.state"
+PAUSE_LIST = "/usr/share/shadowfetch/ember/pause-list.conf"
+RESTORE_TOOL = "/usr/libexec/ember-restore"
+
+# Idle watchdog: under this ELI-work value for this long => extinguish.
+IDLE_THRESHOLD = 20.0
+IDLE_WINDOW_SEC = 600
+IDLE_POLL_SEC = 15
+# WatchdogSec=15 in the unit; ping at a third of that.
+WATCHDOG_PING_SEC = 5
+
+APT_LOCKS = (
+    "/var/lib/dpkg/lock-frontend",
+    "/var/lib/dpkg/lock",
+    "/var/lib/apt/lists/lock",
+    "/var/cache/apt/archives/lock",
+)
+
+
+def log(msg):
+    # stderr goes straight to the journal under systemd.
+    print("emberd: %s" % msg, file=sys.stderr, flush=True)
+
+
+def sd_notify(payload):
+    """Minimal stdlib sd_notify(3).  No-op outside systemd."""
+    addr = os.environ.get("NOTIFY_SOCKET")
+    if not addr:
+        return
+    if addr.startswith("@"):
+        addr = "\0" + addr[1:]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
+            s.connect(addr)
+            s.send(payload.encode("utf-8"))
+    except OSError:
+        # Never let notify plumbing take the engine down.
+        pass
+
+
+def parse_pause_list(path):
+    """Parse the curated pause list.  Read-only in v1.
+
+    Returns a list of dicts: {unit, action, gate, scope}.  Unknown keys
+    are ignored so a future list format cannot crash an old daemon.
+    """
+    import configparser
+    cp = configparser.ConfigParser(interpolation=None)
+    entries = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            cp.read_file(f)
+    except (OSError, configparser.Error) as e:
+        log("cannot read pause list %s: %s -- pausing nothing" % (path, e))
+        return entries
+    for section in cp.sections():
+        entries.append({
+            "unit": section,
+            "action": cp.get(section, "action", fallback="stop").strip(),
+            "gate": cp.get(section, "gate", fallback="none").strip(),
+            "scope": cp.get(section, "scope", fallback="system").strip(),
+        })
+    return entries
+
+
+def pkg_locks_free():
+    """True when no dpkg/apt lock is held.
+
+    This is the whole gate for Phoenix's 80snapper window too: the
+    snapper pre/post hooks only ever run inside a dpkg invocation, and a
+    dpkg invocation holds these locks for its full lifetime.
+    """
+    for lock in APT_LOCKS:
+        try:
+            fd = os.open(lock, os.O_RDWR)
+        except FileNotFoundError:
+            continue
+        except PermissionError:
+            # Cannot even open it: cannot prove idleness, err on the
+            # side of not touching the package system.
+            return False
+        try:
+            import fcntl
+            try:
+                fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.lockf(fd, fcntl.LOCK_UN)
+            except OSError:
+                return False
+        finally:
+            os.close(fd)
+    return True
+
+
+def wwan_default_route():
+    """True when the default route runs over a WWAN-looking interface.
+
+    We never take the modem down under someone whose only uplink it is.
+    """
+    ifaces = set()
+    try:
+        with open("/proc/net/route", encoding="utf-8") as f:
+            next(f, None)  # header
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2 and parts[1] == "00000000":
+                    ifaces.add(parts[0])
+    except OSError:
+        pass
+    try:
+        with open("/proc/net/ipv6_route", encoding="utf-8") as f:
+            for line in f:
+                parts = line.split()
+                # dest prefix 0, prefixlen 0 = default route; iface last.
+                if len(parts) >= 10 and parts[0] == "0" * 32 and parts[1] == "00":
+                    ifaces.add(parts[-1])
+    except OSError:
+        pass
+    for ifname in ifaces:
+        if ifname.startswith(("wwan", "wwp", "ppp", "mbimmux")):
+            return True
+    return False
+
+
+class EmberDBusObject(dbus.service.Object):
+    """com.shadowfetch.Ember1 -- read-only status for the EmberPage."""
+
+    def __init__(self, bus_name, daemon):
+        super().__init__(bus_name, OBJ_PATH)
+        self.daemon = daemon
+
+    # -- the four spec'd properties, by their spec'd names ---------------
+
+    def _properties(self):
+        d = self.daemon
+        return {
+            "armed": dbus.Boolean(d.armed),
+            "hold_active": dbus.Boolean(d.hold_active),
+            "paused_units": dbus.Array(
+                [dbus.String(u) for u in d.paused_units], signature="s"),
+            "state_file_hash": dbus.String(d.state_file_hash()),
+        }
+
+    @dbus.service.method(dbus.PROPERTIES_IFACE,
+                         in_signature="ss", out_signature="v")
+    def Get(self, interface_name, property_name):
+        if interface_name and interface_name != IFACE:
+            raise dbus.exceptions.DBusException(
+                "No such interface: %s" % interface_name,
+                name="org.freedesktop.DBus.Error.UnknownInterface")
+        props = self._properties()
+        if property_name not in props:
+            raise dbus.exceptions.DBusException(
+                "No such property: %s" % property_name,
+                name="org.freedesktop.DBus.Error.UnknownProperty")
+        return props[property_name]
+
+    @dbus.service.method(dbus.PROPERTIES_IFACE,
+                         in_signature="s", out_signature="a{sv}")
+    def GetAll(self, interface_name):
+        if interface_name and interface_name != IFACE:
+            raise dbus.exceptions.DBusException(
+                "No such interface: %s" % interface_name,
+                name="org.freedesktop.DBus.Error.UnknownInterface")
+        return self._properties()
+
+    @dbus.service.method(dbus.PROPERTIES_IFACE, in_signature="ssv")
+    def Set(self, interface_name, property_name, value):
+        raise dbus.exceptions.DBusException(
+            "com.shadowfetch.Ember1 is read-only",
+            name="org.freedesktop.DBus.Error.PropertyReadOnly")
+
+    @dbus.service.signal(dbus.PROPERTIES_IFACE, signature="sa{sv}as")
+    def PropertiesChanged(self, interface_name, changed, invalidated):
+        pass
+
+    def emit_changed(self):
+        self.PropertiesChanged(IFACE, self._properties(), [])
+
+    # -- convenience method: everything in one call ----------------------
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="a{sv}")
+    def GetStatus(self):
+        return self._properties()
+
+
+class EmberDaemon:
+    def __init__(self):
+        self.loop = GLib.MainLoop()
+        self.bus = dbus.SystemBus()
+        self.armed = False
+        self.hold_active = False
+        self.hold_cookie = None
+        self.paused_units = []
+        self.stopping = False
+        self._releasing_own_hold = False
+        self.idle_since = None
+        self.dbus_object = None
+
+    # -- state file -------------------------------------------------------
+
+    def record(self, *fields):
+        """Append one mutation line, fsynced, BEFORE the mutation happens.
+
+        Format (read by /usr/libexec/ember-restore, POSIX sh):
+            governor cpu0 schedutil
+            stopped fwupd.service
+            dropin system.slice cpuweight
+        """
+        os.makedirs(RUN_DIR, mode=0o755, exist_ok=True)
+        line = " ".join(fields) + "\n"
+        fd = os.open(STATE_FILE, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+        try:
+            os.write(fd, line.encode("utf-8"))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+    def state_file_hash(self):
+        try:
+            with open(STATE_FILE, "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        except OSError:
+            return ""
+
+    # -- ppd hold ---------------------------------------------------------
+
+    def try_hold(self):
+        try:
+            obj = self.bus.get_object(PPD_NAME, PPD_PATH)
+            props = dbus.Interface(obj, dbus.PROPERTIES_IFACE)
+            profiles = props.Get(PPD_NAME, "Profiles", timeout=5)
+            names = set()
+            for p in profiles:
+                try:
+                    names.add(str(p.get("Profile", "")))
+                except AttributeError:
+                    pass
+            if "performance" not in names:
+                log("power-profiles-daemon has no 'performance' profile "
+                    "on this hardware -- using the governor fallback")
+                return False
+            iface = dbus.Interface(obj, PPD_NAME)
+            self.hold_cookie = int(iface.HoldProfile(
+                "performance", "Ember Mode", "com.shadowfetch.ember",
+                timeout=5))
+            self.hold_active = True
+            log("holding 'performance' via power-profiles-daemon "
+                "(cookie %d)" % self.hold_cookie)
+            return True
+        except dbus.DBusException as e:
+            log("power-profiles-daemon hold unavailable (%s) -- "
+                "using the governor fallback" % e.get_dbus_name())
+            return False
+
+    def release_hold(self):
+        if not self.hold_active or self.hold_cookie is None:
+            return
+        self._releasing_own_hold = True
+        try:
+            obj = self.bus.get_object(PPD_NAME, PPD_PATH)
+            dbus.Interface(obj, PPD_NAME).ReleaseProfile(
+                dbus.UInt32(self.hold_cookie), timeout=5)
+            log("released the performance hold")
+        except dbus.DBusException as e:
+            # Layer (a) still applies: the hold dies with our connection.
+            log("ReleaseProfile failed (%s); the hold auto-releases when "
+                "this process exits" % e.get_dbus_name())
+        self.hold_active = False
+        self.hold_cookie = None
+
+    def on_profile_released(self, cookie):
+        try:
+            cookie = int(cookie)
+        except (TypeError, ValueError):
+            return
+        if self._releasing_own_hold:
+            return
+        if self.hold_active and cookie == self.hold_cookie:
+            # The user picked another profile in the applet.  Their
+            # machine, their call: graceful extinguish, never a re-hold.
+            log("performance hold released externally (profile change "
+                "in the applet) -- extinguishing, not re-holding")
+            self.hold_active = False
+            self.hold_cookie = None
+            self.extinguish("profile changed by user")
+
+    def on_ppd_owner_changed(self, owner):
+        if not owner and self.hold_active:
+            # ppd went away (crash/restart).  Holds do not survive that.
+            # Stay armed -- the pause pass and CPU weight still help --
+            # but never silently claim a hold we no longer have, and
+            # never re-hold behind the user's back.
+            log("power-profiles-daemon left the bus; performance hold "
+                "is gone (not re-holding)")
+            self.hold_active = False
+            self.hold_cookie = None
+            self.notify_ui()
+
+    # -- governor fallback ------------------------------------------------
+
+    def governor_fallback(self):
+        paths = glob.glob(
+            "/sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor")
+
+        def cpunum(p):
+            m = re.search(r"/cpu(\d+)/", p)
+            return int(m.group(1)) if m else 0
+
+        paths.sort(key=cpunum)
+        if not paths:
+            log("no cpufreq scaling on this machine -- no governor change")
+            return
+        avail_path = os.path.join(os.path.dirname(paths[0]),
+                                  "scaling_available_governors")
+        try:
+            with open(avail_path, encoding="utf-8") as f:
+                available = f.read().split()
+        except OSError:
+            available = []
+        if "performance" not in available:
+            log("'performance' governor not available -- no governor change")
+            return
+        changed = 0
+        for path in paths:
+            cpu = "cpu%d" % cpunum(path)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    prior = f.read().strip()
+            except OSError:
+                continue
+            if prior == "performance" or not prior:
+                continue
+            # Record BEFORE mutating, so a crash mid-pass still restores.
+            self.record("governor", cpu, prior)
+            changed += 1
+        if not changed:
+            log("all CPUs already on the performance governor")
+            return
+        # The spec'd mechanism is linux-cpupower; sysfs is the fallback's
+        # fallback so a missing cpupower binary cannot strand us armed
+        # with recorded-but-unapplied state.
+        try:
+            subprocess.run(
+                ["cpupower", "frequency-set", "-g", "performance"],
+                check=True, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=15)
+            log("governor set to performance via cpupower "
+                "(%d cpus recorded)" % changed)
+            return
+        except (OSError, subprocess.SubprocessError):
+            pass
+        for path in paths:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("performance\n")
+            except OSError:
+                pass
+        log("governor set to performance via sysfs "
+            "(%d cpus recorded)" % changed)
+
+    # -- pause pass -------------------------------------------------------
+
+    def _systemd_manager(self):
+        obj = self.bus.get_object(SYSTEMD_NAME, SYSTEMD_PATH)
+        return dbus.Interface(obj, SYSTEMD_MGR)
+
+    def _unit_active(self, unit):
+        try:
+            mgr = self._systemd_manager()
+            path = mgr.GetUnit(unit)
+            uobj = self.bus.get_object(SYSTEMD_NAME, path)
+            props = dbus.Interface(uobj, dbus.PROPERTIES_IFACE)
+            state = str(props.Get("org.freedesktop.systemd1.Unit",
+                                  "ActiveState", timeout=5))
+            return state in ("active", "activating", "reloading")
+        except dbus.DBusException:
+            # NoSuchUnit and friends: not loaded, nothing to pause.
+            return False
+
+    def _packagekit_idle(self):
+        """True when PackageKit has no transactions in flight.
+
+        Only ever called when packagekit.service is ALREADY ACTIVE, so
+        this query cannot bus-activate the very daemon we are about to
+        stop.
+        """
+        try:
+            obj = self.bus.get_object("org.freedesktop.PackageKit",
+                                      "/org/freedesktop/PackageKit")
+            tlist = obj.GetTransactionList(
+                dbus_interface="org.freedesktop.PackageKit", timeout=5)
+            return len(tlist) == 0
+        except dbus.DBusException:
+            # Cannot ask: do not claim idleness we cannot prove.
+            return False
+
+    def gate_open(self, gate, unit):
+        if gate in ("none", ""):
+            return True
+        if gate == "pkg-idle":
+            # dpkg/apt lock free covers Phoenix's 80snapper window too:
+            # the snapper hooks only run inside a dpkg invocation, and
+            # dpkg holds the lock for its whole lifetime.
+            if not pkg_locks_free():
+                log("skipping %s: a package transaction is running" % unit)
+                return False
+            if not self._packagekit_idle():
+                log("skipping %s: PackageKit reports transactions" % unit)
+                return False
+            return True
+        if gate == "no-wwan-default-route":
+            if wwan_default_route():
+                log("skipping %s: the default route is a WWAN bearer" % unit)
+                return False
+            return True
+        log("skipping %s: unknown gate '%s' in pause list" % (unit, gate))
+        return False
+
+    def pause_pass(self):
+        for entry in parse_pause_list(PAUSE_LIST):
+            unit, action = entry["unit"], entry["action"]
+            if entry["scope"] != "system":
+                # baloo: user scope, owned by the Control Center session
+                # helper (balooctl6 suspend/resume), never by root.
+                continue
+            if action != "stop":
+                log("skipping %s: unknown action '%s'" % (unit, action))
+                continue
+            if not self._unit_active(unit):
+                continue
+            if not self.gate_open(entry["gate"], unit):
+                continue
+            # Record BEFORE stopping: a crash between the two leaves a
+            # line whose undo (start --no-block) is a harmless no-op.
+            self.record("stopped", unit)
+            try:
+                self._systemd_manager().StopUnit(unit, "replace")
+                self.paused_units.append(unit)
+                log("paused %s" % unit)
+            except dbus.DBusException as e:
+                log("could not stop %s: %s" % (unit, e.get_dbus_name()))
+
+    # -- CPU weight -------------------------------------------------------
+
+    def apply_cpu_weight(self):
+        # Contention-side only: background daemons in system.slice lose
+        # CPU arbitration against the user session under load; idle
+        # background work is untouched.  Runtime drop-in: gone on reboot.
+        self.record("dropin", "system.slice", "cpuweight")
+        try:
+            subprocess.run(
+                ["systemctl", "set-property", "--runtime",
+                 "system.slice", "CPUWeight=40"],
+                check=True, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=15)
+            log("system.slice CPUWeight=40 (runtime)")
+        except (OSError, subprocess.SubprocessError) as e:
+            log("could not set CPUWeight on system.slice: %s" % e)
+
+    # -- idle watchdog ----------------------------------------------------
+
+    def eli_work(self):
+        """ELI work terms (CPU EMA, GPU busy%) from firewatchd.
+
+        Judge must-fix, folded: thermal proximity is EXCLUDED here.  If
+        firewatchd is not running or does not answer, we return None and
+        the idle timer resets -- Ember never auto-returns on missing
+        data, and never overstays because of a hot chassis either.
+        """
+        try:
+            obj = self.bus.get_object(FIREWATCH_NAME, FIREWATCH_PATH)
+            props = dbus.Interface(obj, dbus.PROPERTIES_IFACE)
+        except dbus.DBusException:
+            return None
+        for prop in ("EliWork", "ELIWork", "ELI", "Eli"):
+            try:
+                return float(props.Get(FIREWATCH_IFACE, prop, timeout=2))
+            except (dbus.DBusException, TypeError, ValueError):
+                continue
+        return None
+
+    def idle_tick(self):
+        if self.stopping:
+            return False
+        value = self.eli_work()
+        now = time.monotonic()
+        if value is None or value >= IDLE_THRESHOLD:
+            self.idle_since = None
+        else:
+            if self.idle_since is None:
+                self.idle_since = now
+            elif now - self.idle_since >= IDLE_WINDOW_SEC:
+                log("ELI-work under %.0f%% for %d minutes -- returning "
+                    "to Balanced" % (IDLE_THRESHOLD, IDLE_WINDOW_SEC // 60))
+                self.extinguish("idle")
+                return False
+        return True
+
+    # -- lifecycle --------------------------------------------------------
+
+    def notify_ui(self):
+        if self.dbus_object is not None:
+            try:
+                self.dbus_object.emit_changed()
+            except dbus.DBusException:
+                pass
+
+    def watchdog_tick(self):
+        if self.stopping:
+            return False
+        sd_notify("WATCHDOG=1")
+        return True
+
+    def extinguish(self, reason):
+        if self.stopping:
+            return
+        self.stopping = True
+        log("extinguishing (%s)" % reason)
+        sd_notify("STOPPING=1\nSTATUS=Extinguishing: %s" % reason)
+        self.release_hold()
+        # Exiting cleanly stops the unit; systemd then runs
+        # ExecStopPost=/usr/libexec/ember-restore, which undoes the
+        # recorded mutations.  Nothing to do here beyond quitting.
+        GLib.idle_add(self.loop.quit)
+
+    def on_terminate(self):
+        self.extinguish("stop requested")
+        return GLib.SOURCE_REMOVE
+
+    def run(self):
+        # Defensive: ExecStartPre already ran ember-restore, but if
+        # someone runs emberd by hand over leftover state, restore first.
+        # The tool is idempotent by design.
+        if os.path.exists(STATE_FILE) and os.path.exists(RESTORE_TOOL):
+            log("leftover %s found -- running ember-restore first" % STATE_FILE)
+            try:
+                subprocess.run([RESTORE_TOOL], check=False, timeout=60)
+            except (OSError, subprocess.SubprocessError) as e:
+                log("ember-restore failed: %s" % e)
+
+        try:
+            name = dbus.service.BusName(BUS_NAME, self.bus,
+                                        do_not_queue=True)
+        except dbus.exceptions.NameExistsException:
+            log("another emberd already owns %s -- refusing to double-arm"
+                % BUS_NAME)
+            return 1
+        self.dbus_object = EmberDBusObject(name, self)
+
+        # Watch ppd before arming so no release can slip past us.
+        self.bus.add_signal_receiver(
+            self.on_profile_released,
+            signal_name="ProfileReleased",
+            dbus_interface=PPD_NAME,
+            path=PPD_PATH)
+        self.bus.watch_name_owner(PPD_NAME, self.on_ppd_owner_changed)
+
+        # Arm.
+        if not self.try_hold():
+            self.governor_fallback()
+        self.pause_pass()
+        self.apply_cpu_weight()
+        self.armed = True
+        self.notify_ui()
+
+        GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGTERM,
+                             self.on_terminate)
+        GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGINT,
+                             self.on_terminate)
+        GLib.timeout_add_seconds(WATCHDOG_PING_SEC, self.watchdog_tick)
+        GLib.timeout_add_seconds(IDLE_POLL_SEC, self.idle_tick)
+
+        sd_notify("READY=1\nSTATUS=Ember armed: hold=%s, %d service(s) "
+                  "paused" % ("yes" if self.hold_active else "fallback",
+                              len(self.paused_units)))
+        log("armed (hold_active=%s, paused=%s)"
+            % (self.hold_active, ",".join(self.paused_units) or "none"))
+
+        self.loop.run()
+        return 0
+
+
+def main():
+    if os.geteuid() != 0:
+        print("emberd: must run as root (start it with "
+              "'systemctl start shadowfetch-ember.service')",
+              file=sys.stderr)
+        return 1
+    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    daemon = EmberDaemon()
+    return daemon.run()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

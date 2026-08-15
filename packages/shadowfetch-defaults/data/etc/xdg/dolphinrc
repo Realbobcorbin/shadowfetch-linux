@@ -1,0 +1,3 @@
+[PreviewSettings]
+Plugins=ffmpegthumbs,imagethumbnail,jpegthumbnail,svgthumbnail,kdegraphicsthumbnailer,audiothumbnail
+MaximumRemoteSize=0

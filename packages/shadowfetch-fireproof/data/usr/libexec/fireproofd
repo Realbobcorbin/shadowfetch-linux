@@ -1,0 +1,1227 @@
+#!/usr/bin/env python3
+"""fireproofd - Shadowfetch Fireproof update daemon (D-Bus: org.shadowfetch.Fireproof1).
+
+Fireproof's contract, all of it enforced in this one process:
+
+  * ANALYZE IS SIDE-EFFECT FREE. Opening the analyze screen takes no apt
+    lock and downloads nothing. The pending upgrade is simulated with
+    python3-apt on a read-only cache (same libapt-pkg as apt itself, so
+    the resolver answers identically to `apt full-upgrade`), a
+    safe-upgrade diff yields the kept-back story, holds surface as
+    "pinned, will not update", and library renames (libfoo1 -> libfoo1t64)
+    collapse to one "same library, new name" line. NEWS is lazy: nothing
+    is fetched at analyze time.
+
+  * THE LOCK IS TAKEN ONLY AT COMMIT. When the user clicks Update we
+    acquire /var/lib/dpkg/lock-frontend, re-run the simulation and
+    compare the change-set hash the user approved against what the
+    archive would do now. Drift releases the lock and re-renders analyze.
+    A user idling on the analyze screen holds NOTHING against Discover
+    or terminal apt.
+
+  * FIREPROOF CREATES ZERO SNAPSHOTS. snapper's shipped 80snapper
+    DPkg::Pre/Post-Invoke hooks (plus Phoenix's 79phoenix-space) wrap the
+    commit; we only record the highest snapper number before the commit,
+    then name the FIRST type=pre snapshot above it as the rollback target
+    (one apt transaction can invoke dpkg several times - always the
+    first pre) and relabel it with fireproof=pre,txn=<uuid> userdata.
+
+  * THE VERIFY BATTERY runs headless in seconds after the commit:
+    dpkg --audit, apt -f consistency, initrd freshness for every new
+    kernel, grub.cfg regeneration, dkms module state on the new kernel,
+    systemctl --failed diffed against a pre-commit baseline, needrestart,
+    default route + resolution of the mirror just used, and a WARN-only
+    graphics scan. A graphical login is never claimed before a reboot.
+
+  * ZERO TELEMETRY. The only network traffic this daemon ever causes is
+    the archive download the user explicitly clicked for, against the
+    mirrors already configured in apt.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+"""
+
+import fnmatch
+import glob
+import hashlib
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+import uuid
+from datetime import datetime, timezone
+
+if any(a in ("-h", "--help") for a in sys.argv[1:]):
+    print(__doc__)
+    raise SystemExit(0)
+if "--version" in sys.argv[1:]:
+    try:
+        v = open("/usr/share/shadowfetch/version").read().strip()
+    except OSError:
+        v = "unknown"
+    print("fireproofd (Shadowfetch Linux) " + v)
+    raise SystemExit(0)
+
+import apt
+import apt.progress.base
+import apt_pkg
+import dbus
+import dbus.service
+import dbus.mainloop.glib
+from gi.repository import GLib
+
+BUS_NAME = "org.shadowfetch.Fireproof1"
+OBJ_PATH = "/org/shadowfetch/Fireproof1"
+IFACE = "org.shadowfetch.Fireproof1"
+ACTION_UPDATE = "org.shadowfetch.fireproof.update"
+
+STATE_DIR = "/var/lib/shadowfetch"
+STATE_FILE = os.path.join(STATE_DIR, "fireproof-state.json")
+PENDING_FILE = os.path.join(STATE_DIR, "fireproof-pending")
+LOCK_FRONTEND = "/var/lib/dpkg/lock-frontend"
+
+# RED classifier: packages whose failure can cost the boot, the session or
+# the network. The dialog default flips to "Don't proceed" when any is set.
+RED_NAMES = (
+    "linux-image-*", "grub-*", "sddm", "plasma-desktop", "plasma-workspace",
+    "network-manager", "systemd", "shadowfetch-*", "snapper",
+)
+# 500 MB, decimal, exactly as the spec words the major-transition trigger
+# (">500 MB" means 500 * 1000 * 1000 bytes, not 500 MiB).
+MAJOR_DOWNLOAD_BYTES = 500 * 1000 * 1000
+MAJOR_PACKAGE_COUNT = 300
+MAJOR_REMOVAL_COUNT = 10
+
+NVIDIA_LOCKSTEP = "550.163.01"
+
+# needrestart-detected services we never restart from the verify battery:
+# restarting these kills the session or the daemon doing the restarting.
+RESTART_DENYLIST = (
+    "sddm", "dbus", "systemd-logind", "NetworkManager", "user@", "getty@",
+    "fireproofd", "polkit", "snapperd",
+)
+
+GRAPHICS_BINARIES = (
+    "/usr/bin/sddm", "/usr/bin/kwin_wayland", "/usr/bin/plasmashell",
+    "/usr/bin/Xwayland",
+)
+
+
+# --------------------------------------------------------------------------
+# D-Bus error classes: each carries a real wire error name so clients can
+# programmatically tell NotAuthorized from Busy from AnalyzeFailed.
+# --------------------------------------------------------------------------
+
+class NotAuthorizedError(dbus.DBusException):
+    _dbus_error_name = IFACE + ".NotAuthorized"
+
+
+class BusyError(dbus.DBusException):
+    _dbus_error_name = IFACE + ".Busy"
+
+
+class AnalyzeFailedError(dbus.DBusException):
+    _dbus_error_name = IFACE + ".AnalyzeFailed"
+
+
+class VerifyFailedError(dbus.DBusException):
+    _dbus_error_name = IFACE + ".VerifyFailed"
+
+
+class InvalidArgsError(dbus.DBusException):
+    _dbus_error_name = "org.freedesktop.DBus.Error.InvalidArgs"
+
+
+class PropertyReadOnlyError(dbus.DBusException):
+    _dbus_error_name = "org.freedesktop.DBus.Error.PropertyReadOnly"
+
+
+def log(msg):
+    print("fireproofd: %s" % msg, file=sys.stderr, flush=True)
+
+
+def now_iso():
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def run(cmd, timeout=30):
+    """Run a command, never raise; return (rc, stdout, stderr).
+
+    LC_ALL=C / LANG=C always: several callers parse the output (apt's
+    "0 upgraded, ..." line, needrestart, snapper CSV), and a translated
+    message must never flip a verify check from pass to warn.
+    """
+    env = dict(os.environ, LC_ALL="C", LANG="C", LANGUAGE="C")
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                           env=env)
+        return p.returncode, p.stdout, p.stderr
+    except subprocess.TimeoutExpired:
+        return 124, "", "timeout"
+    except OSError as e:
+        return 127, "", str(e)
+
+
+def atomic_write(path, text):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def load_state():
+    try:
+        with open(STATE_FILE) as f:
+            st = json.load(f)
+        if isinstance(st, dict):
+            st.setdefault("schema", 1)
+            st.setdefault("failed_sets", [])
+            st.setdefault("last_txn", None)
+            return st
+    except (OSError, ValueError):
+        pass
+    return {"schema": 1, "failed_sets": [], "last_txn": None}
+
+
+def save_state(state):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    atomic_write(STATE_FILE, json.dumps(state, indent=1, sort_keys=True) + "\n")
+
+
+# --------------------------------------------------------------------------
+# snapper helpers (read + relabel only; Fireproof never CREATES snapshots)
+# --------------------------------------------------------------------------
+
+def snapper_list():
+    """Return [(number, type, date, description)] or [] when unavailable."""
+    rc, out, _ = run(["snapper", "-c", "root", "--machine-readable", "csv",
+                      "list", "--columns", "number,type,date,description"], timeout=20)
+    rows = []
+    if rc == 0:
+        for line in out.splitlines()[1:]:
+            parts = line.split(",", 3)
+            if len(parts) >= 2 and parts[0].isdigit():
+                rows.append((int(parts[0]), parts[1].strip(),
+                             parts[2].strip() if len(parts) > 2 else "",
+                             parts[3].strip() if len(parts) > 3 else ""))
+    return rows
+
+
+def snapper_max_number():
+    rows = snapper_list()
+    return max((n for n, _t, _d, _desc in rows), default=0)
+
+
+def snapper_first_pre_after(n):
+    """The rollback target: FIRST type=pre snapshot with number > n."""
+    pres = sorted(num for num, typ, _d, _desc in snapper_list()
+                  if typ == "pre" and num > n)
+    return pres[0] if pres else None
+
+
+def phoenix_available():
+    """Btrfs root + snapper config + apt snapshots not disabled."""
+    rc, out, _ = run(["findmnt", "-n", "-o", "FSTYPE", "/"], timeout=5)
+    if rc != 0 or out.strip() != "btrfs":
+        return False
+    if not os.path.exists("/etc/snapper/configs/root"):
+        return False
+    try:
+        with open("/etc/default/snapper") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("DISABLE_APT_SNAPSHOT"):
+                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if val.lower() in ("yes", "true", "1"):
+                        return False
+    except OSError:
+        pass
+    return True
+
+
+# --------------------------------------------------------------------------
+# analysis (pure read: no lock, no download, no cache mutation on disk)
+# --------------------------------------------------------------------------
+
+def apt_quote(s, bad="_:"):
+    """apt's QuoteString(): percent-encode bad chars, '%' and non-printables.
+
+    apt names files in /var/cache/apt/archives with the version passed
+    through QuoteString(ver, "_:"), so an epoch like 1:2.5-1 is stored as
+    1%3a2.5-1 - NOT the pool basename, which omits the epoch entirely.
+    """
+    out = []
+    for ch in s:
+        if ch in bad or ch == "%" or ord(ch) < 0x21 or ord(ch) > 0x7e:
+            out.append("%%%02x" % ord(ch))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def cached_deb_path(name, version, arch):
+    """The exact /var/cache/apt/archives path apt uses for this version."""
+    return os.path.join("/var/cache/apt/archives",
+                        "%s_%s_%s.deb" % (apt_quote(name), apt_quote(version),
+                                          apt_quote(arch)))
+
+
+def _lib_stem(name):
+    """Strip soname digits and the t64 ABI suffix: libfoo1t64 -> libfoo."""
+    n = name
+    if n.endswith("t64"):
+        n = n[:-3]
+    return n.rstrip("0123456789.-")
+
+
+def pair_library_renames(installs, removals):
+    """Collapse a removed libfoo1 paired with a newly installed libfoo1t64
+    (or successor soname) into one rename event, not two rows.
+
+    Returns (renames, installs, removals) with consumed entries removed.
+    """
+    renames = []
+    removal_by_stem = {}
+    for r in removals:
+        if r["name"].startswith("lib"):
+            removal_by_stem.setdefault(_lib_stem(r["name"]), []).append(r)
+    consumed_removals, consumed_installs = set(), set()
+    for i in installs:
+        if not i["name"].startswith("lib"):
+            continue
+        for r in removal_by_stem.get(_lib_stem(i["name"]), []):
+            if r["name"] != i["name"] and id(r) not in consumed_removals:
+                renames.append({
+                    "from": r["name"], "to": i["name"],
+                    "version": i["candidate"],
+                    "note": "same library, new name",
+                })
+                consumed_removals.add(id(r))
+                consumed_installs.add(id(i))
+                break
+    removals = [r for r in removals if id(r) not in consumed_removals]
+    installs = [i for i in installs if id(i) not in consumed_installs]
+    return renames, installs, removals
+
+
+def _is_red(pkg, candidate):
+    if pkg.essential:
+        return True
+    if candidate is not None and candidate.priority in ("required", "important"):
+        return True
+    return any(fnmatch.fnmatch(pkg.name, pat) for pat in RED_NAMES)
+
+
+def change_set_hash(changes):
+    """sha256 of the sorted pkg=ver Inst/Remv list the user is approving."""
+    lines = []
+    for pkg in changes:
+        if pkg.marked_delete:
+            ver = pkg.installed.version if pkg.installed else "?"
+            lines.append("Remv %s=%s" % (pkg.name, ver))
+        else:
+            ver = pkg.candidate.version if pkg.candidate else "?"
+            lines.append("Inst %s=%s" % (pkg.name, ver))
+    return hashlib.sha256("\n".join(sorted(lines)).encode()).hexdigest()
+
+
+def build_analysis(state):
+    """Simulate the pending upgrade read-only and describe it honestly."""
+    cache = apt.Cache(apt.progress.base.OpProgress())
+
+    holds = []
+    upgradable = 0
+    for pkg in cache:
+        if not pkg.installed:
+            continue
+        if pkg.is_upgradable:
+            upgradable += 1
+        if pkg._pkg.selected_state == apt_pkg.SELSTATE_HOLD:
+            holds.append({
+                "name": pkg.name,
+                "installed": pkg.installed.version,
+                "candidate": pkg.candidate.version if pkg.candidate else None,
+                "note": "pinned, will not update",
+            })
+
+    # Safe path first (upgrade without removals), for the kept-back story.
+    cache.upgrade(dist_upgrade=False)
+    safe_names = {p.name for p in cache.get_changes()}
+    cache.clear()
+
+    # The full path the Update button would take.
+    cache.upgrade(dist_upgrade=True)
+    changes = cache.get_changes()
+
+    installs, upgrades, removals = [], [], []
+    for pkg in changes:
+        cand = pkg.candidate
+        entry = {
+            "name": pkg.name,
+            "installed": pkg.installed.version if pkg.installed else None,
+            "candidate": cand.version if cand else None,
+            "red": _is_red(pkg, cand),
+        }
+        if pkg.marked_delete:
+            removals.append(entry)
+        elif pkg.marked_install:
+            installs.append(entry)
+        else:
+            upgrades.append(entry)
+
+    renames, installs, removals = pair_library_renames(installs, removals)
+
+    try:
+        download_bytes = int(cache.required_download)
+    except Exception:
+        download_bytes = 0
+    try:
+        space_bytes = int(cache.required_space)
+    except Exception:
+        space_bytes = 0
+
+    full_names = {p.name for p in changes}
+    kept = sorted(n for n in full_names if n not in safe_names and n in
+                  {p.name for p in changes if not p.marked_install})
+    kept_story = ("full path removes %d; safe path skips %d"
+                  % (len(removals) + len(renames),
+                     len(full_names - safe_names)))
+
+    kernels = sorted(p["name"] for p in installs + upgrades
+                     if p["name"].startswith("linux-image-"))
+    nvidia = any("nvidia" in p["name"] for p in installs + upgrades + removals)
+
+    cs_hash = change_set_hash(changes)
+
+    same_set = None
+    for rec in state.get("failed_sets", []):
+        if rec.get("hash") == cs_hash:
+            same_set = {"date": rec.get("date"), "reason": rec.get("reason")}
+
+    total = len(installs) + len(upgrades) + len(removals) + len(renames)
+    analysis = {
+        "schema": 1,
+        "generated_at": now_iso(),
+        "change_set_hash": cs_hash,
+        "counts": {
+            "install": len(installs),
+            "upgrade": len(upgrades),
+            "remove": len(removals),
+            "rename": len(renames),
+            "total": total,
+            "download_bytes": download_bytes,
+            "space_bytes": space_bytes,
+        },
+        "installs": installs,
+        "upgrades": upgrades,
+        "removals": removals,
+        "library_renames": renames,
+        "holds": holds,
+        "kept_back": {
+            "story": kept_story,
+            "packages": kept,
+        },
+        "banners": {
+            "major_transition": (download_bytes > MAJOR_DOWNLOAD_BYTES
+                                 or total > MAJOR_PACKAGE_COUNT
+                                 or len(removals) > MAJOR_REMOVAL_COUNT),
+            "kernel": ({"packages": kernels,
+                        "running": os.uname().release,
+                        "note": "reboot required; initrd and NVIDIA module "
+                                "will be rebuilt"} if kernels else None),
+            "nvidia": ({"note": "NVIDIA components update in lockstep with "
+                                "driver %s - driver, tools and kernel module "
+                                "move together" % NVIDIA_LOCKSTEP}
+                       if nvidia else None),
+            "same_set_rollback": same_set,
+            "phoenix_available": phoenix_available(),
+            "default_dont_proceed": bool(
+                same_set or any(p["red"] for p in installs + upgrades + removals)),
+        },
+        "update_count": upgradable,
+        "notify_suppressed": bool(same_set),
+    }
+    cache.clear()
+    return analysis
+
+
+# --------------------------------------------------------------------------
+# progress bridges (worker thread -> D-Bus signals via the GLib loop)
+# --------------------------------------------------------------------------
+
+class SignalAcquireProgress(apt.progress.base.AcquireProgress):
+    def __init__(self, emit, cancel_event, hosts):
+        super().__init__()
+        self._emit = emit
+        self._cancel = cancel_event
+        self._hosts = hosts
+
+    def fetch(self, item):
+        try:
+            uri = item.uri
+            host = uri.split("://", 1)[-1].split("/", 1)[0]
+            if host:
+                self._hosts.add(host)
+        except Exception:
+            pass
+
+    def pulse(self, owner):
+        if self._cancel.is_set():
+            return False
+        pct = 0
+        if self.total_bytes:
+            pct = int(self.current_bytes * 100 / self.total_bytes)
+        self._emit("download", pct,
+                   "Downloading %d of %d files (%d MB of %d MB)"
+                   % (self.current_items, self.total_items,
+                      self.current_bytes // (1024 * 1024),
+                      self.total_bytes // (1024 * 1024)))
+        return True
+
+
+class SignalInstallProgress(apt.progress.base.InstallProgress):
+    def __init__(self, emit):
+        super().__init__()
+        self._emit = emit
+
+    def status_change(self, pkg, percent, status):
+        self._emit("install", int(percent), "%s: %s" % (pkg, status))
+
+    def error(self, pkg, errormsg):
+        self._emit("install-error", 0, "%s: %s" % (pkg, errormsg))
+
+
+# --------------------------------------------------------------------------
+# post-update verify battery
+# --------------------------------------------------------------------------
+
+def failed_units():
+    rc, out, _ = run(["systemctl", "--failed", "--no-legend", "--plain"], timeout=10)
+    if rc not in (0, 1):
+        return []
+    return sorted(line.split()[0] for line in out.splitlines() if line.split())
+
+
+def _kernel_version_from_pkg(name):
+    return name[len("linux-image-"):] if name.startswith("linux-image-") else None
+
+
+def run_verify(txn):
+    """Headless verify battery. Returns the checklist + a verdict.
+
+    Hard failures (audit non-empty, missing/stale initrd, dkms failure
+    with nvidia involved) lead with Restore; soft failures default to
+    'continue, reboot recommended'. A graphical login is NEVER claimed
+    pre-reboot: the graphics check is WARN-level only.
+    """
+    checks = []
+    hard_fail = False
+    reboot_recommended = bool(txn.get("kernels"))
+
+    def add(cid, label, status, detail):
+        checks.append({"id": cid, "label": label, "status": status,
+                       "detail": detail})
+
+    # (a) package database consistency
+    rc, out, _ = run(["dpkg", "--audit"], timeout=60)
+    if rc == 0 and not out.strip():
+        add("dpkg-audit", "Package database consistent", "pass", "dpkg --audit is empty")
+    else:
+        add("dpkg-audit", "Package database consistent", "fail",
+            (out.strip() or "dpkg --audit failed")[:2000])
+        hard_fail = True
+
+    rc, out, err = run(["apt-get", "-s", "-f", "install"], timeout=120)
+    if rc == 0 and "0 upgraded, 0 newly installed, 0 to remove" in out:
+        add("apt-consistency", "No broken dependencies", "pass",
+            "apt-get -s -f install proposes no changes")
+    elif rc == 0:
+        add("apt-consistency", "No broken dependencies", "warn",
+            "apt-get -f install would still make changes")
+    else:
+        add("apt-consistency", "No broken dependencies", "fail",
+            (err or out).strip()[:2000])
+        hard_fail = True
+
+    # (b) initrd freshness for every kernel installed by this transaction
+    started = float(txn.get("started_epoch", 0))
+    new_kernels = [k for k in (_kernel_version_from_pkg(n)
+                               for n in txn.get("kernels", [])) if k]
+    for kver in new_kernels:
+        initrd = "/boot/initrd.img-%s" % kver
+        try:
+            st = os.stat(initrd)
+            if st.st_size <= 10 * 1024 * 1024:
+                add("initrd-%s" % kver, "Initrd built for %s" % kver, "fail",
+                    "%s is only %d bytes" % (initrd, st.st_size))
+                hard_fail = True
+            elif started and st.st_mtime < started:
+                add("initrd-%s" % kver, "Initrd built for %s" % kver, "fail",
+                    "%s predates this update" % initrd)
+                hard_fail = True
+            else:
+                add("initrd-%s" % kver, "Initrd built for %s" % kver, "pass",
+                    "%s, %d MB, rebuilt during this update"
+                    % (initrd, st.st_size // (1024 * 1024)))
+        except OSError:
+            add("initrd-%s" % kver, "Initrd built for %s" % kver, "fail",
+                "%s does not exist" % initrd)
+            hard_fail = True
+
+    # (c) GRUB regenerated and aware of the new kernel
+    if new_kernels:
+        grub_cfg = "/boot/grub/grub.cfg"
+        try:
+            text = open(grub_cfg, errors="replace").read()
+            missing = [k for k in new_kernels if k not in text]
+            regenerated = started and os.stat(grub_cfg).st_mtime >= started
+            if missing:
+                add("grub", "Boot menu lists the new kernel", "fail",
+                    "grub.cfg does not mention %s" % ", ".join(missing))
+                hard_fail = True
+            elif not regenerated:
+                add("grub", "Boot menu lists the new kernel", "warn",
+                    "grub.cfg mentions the new kernel but was not regenerated "
+                    "during this update")
+            else:
+                add("grub", "Boot menu lists the new kernel", "pass",
+                    "grub.cfg regenerated and lists %s" % ", ".join(new_kernels))
+        except OSError as e:
+            add("grub", "Boot menu lists the new kernel", "fail",
+                "cannot read %s: %s" % (grub_cfg, e))
+            hard_fail = True
+
+    # (d) dkms modules on the new kernel (THE black-screen preventer with
+    # nvidia-kernel-dkms; a dkms failure with nvidia involved is hard)
+    if new_kernels and shutil.which("dkms"):
+        for kver in new_kernels:
+            rc, out, _ = run(["dkms", "status", "-k", kver], timeout=60)
+            lines = [ln for ln in out.splitlines() if ln.strip()]
+            bad = [ln for ln in lines if "installed" not in ln]
+            if rc != 0:
+                add("dkms-%s" % kver, "Kernel modules built for %s" % kver,
+                    "warn", "dkms status failed")
+            elif bad:
+                nvidia_bad = any("nvidia" in ln for ln in bad)
+                add("dkms-%s" % kver, "Kernel modules built for %s" % kver,
+                    "fail" if nvidia_bad else "warn",
+                    "; ".join(bad)[:2000])
+                if nvidia_bad or txn.get("nvidia"):
+                    hard_fail = True
+            elif lines:
+                add("dkms-%s" % kver, "Kernel modules built for %s" % kver,
+                    "pass", "%d module(s) installed" % len(lines))
+            else:
+                add("dkms-%s" % kver, "Kernel modules built for %s" % kver,
+                    "pass", "no dkms modules registered")
+
+    # (e) failed units, diffed against the pre-commit baseline: only NEW
+    # failures count, so a unit the admin masked-broken long ago stays quiet
+    baseline = set(txn.get("baseline_failed", []))
+    new_failed = [u for u in failed_units() if u not in baseline]
+    if new_failed:
+        add("failed-units", "No newly failed services", "warn",
+            "new failures: %s" % ", ".join(new_failed))
+    else:
+        add("failed-units", "No newly failed services", "pass",
+            "systemctl --failed shows nothing new")
+
+    # needrestart: kernel state + restart of non-session services
+    if shutil.which("needrestart"):
+        rc, out, _ = run(["needrestart", "-b"], timeout=120)
+        ksta = 1
+        svcs = []
+        for line in out.splitlines():
+            if line.startswith("NEEDRESTART-KSTA:"):
+                try:
+                    ksta = int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
+            elif line.startswith("NEEDRESTART-SVC:"):
+                svcs.append(line.split(":", 1)[1].strip())
+        restarted, skipped = [], []
+        for svc in svcs:
+            if any(svc.startswith(d) for d in RESTART_DENYLIST):
+                skipped.append(svc)
+                continue
+            rrc, _, _ = run(["systemctl", "restart", svc], timeout=60)
+            (restarted if rrc == 0 else skipped).append(svc)
+        detail = []
+        if restarted:
+            detail.append("restarted: %s" % ", ".join(restarted))
+        if skipped:
+            detail.append("left for reboot: %s" % ", ".join(skipped))
+        if ksta > 1:
+            reboot_recommended = True
+            add("needrestart", "Services on current libraries",
+                "warn", "; ".join(detail) or
+                "an obsolete kernel is running - reboot recommended")
+        else:
+            add("needrestart", "Services on current libraries",
+                "pass", "; ".join(detail) or "nothing needs a restart")
+
+    # (f) network still stands: default route + the mirror we just used
+    rc, out, _ = run(["ip", "route", "show", "default"], timeout=5)
+    if rc == 0 and out.strip():
+        add("route", "Default route present", "pass", out.strip().splitlines()[0])
+    else:
+        add("route", "Default route present", "warn", "no default route")
+    mirror = next(iter(txn.get("mirror_hosts", [])), None)
+    if mirror:
+        rc, out, _ = run(["getent", "hosts", mirror], timeout=3)
+        if rc == 0 and out.strip():
+            add("dns", "Mirror still resolves", "pass", mirror)
+        else:
+            add("dns", "Mirror still resolves", "warn",
+                "%s did not resolve within 3 s" % mirror)
+
+    # (g) graphics, honest limit: WARN-level only, never a pre-reboot claim
+    rc, _, _ = run(["systemctl", "is-active", "--quiet", "sddm.service"], timeout=5)
+    sessions = (glob.glob("/usr/share/wayland-sessions/*.desktop")
+                + glob.glob("/usr/share/xsessions/*.desktop"))
+    missing_libs = []
+    for binary in GRAPHICS_BINARIES:
+        if os.path.exists(binary):
+            _, lout, _ = run(["ldd", binary], timeout=10)
+            for line in lout.splitlines():
+                if "not found" in line:
+                    missing_libs.append("%s: %s" % (os.path.basename(binary),
+                                                    line.strip()))
+    if rc == 0 and sessions and not missing_libs:
+        add("graphics", "Display manager and session files look intact",
+            "pass", "sddm active, session files present, no missing "
+                    "libraries - a graphical login is only proven by the "
+                    "next boot")
+    else:
+        bits = []
+        if rc != 0:
+            bits.append("sddm not active")
+        if not sessions:
+            bits.append("no session .desktop files")
+        bits.extend(missing_libs[:5])
+        add("graphics", "Display manager and session files look intact",
+            "warn", "; ".join(bits) or "inconclusive")
+
+    if hard_fail:
+        verdict = "restore-recommended"
+    elif reboot_recommended or any(c["status"] == "warn" for c in checks):
+        verdict = "reboot-recommended"
+    else:
+        verdict = "ok"
+    return {
+        "schema": 1,
+        "verified_at": now_iso(),
+        "checks": checks,
+        "verdict": verdict,
+        "restore_point": txn.get("pre_point"),
+        "txn": txn.get("txn"),
+    }
+
+
+# --------------------------------------------------------------------------
+# the D-Bus service
+# --------------------------------------------------------------------------
+
+class Fireproof(dbus.service.Object):
+    def __init__(self, bus, loop):
+        super().__init__(bus, OBJ_PATH)
+        self._bus = bus
+        self._loop = loop
+        self._lock = threading.Lock()      # one operation at a time
+        self._phase = "idle"
+        self._state = load_state()
+        self._analysis = None
+        self._cancel_download = threading.Event()
+        self._news_decision = None
+        self._news_event = threading.Event()
+        self._quit_requested = False   # SIGTERM arrived while committing
+        os.makedirs(STATE_DIR, exist_ok=True)
+
+    # -- signal plumbing (worker threads marshal through the GLib loop) ----
+
+    def _emit_progress(self, phase, percent, message):
+        GLib.idle_add(self.Progress, phase, percent, message)
+
+    def _set_phase(self, phase):
+        self._phase = phase
+        self._emit_progress("phase", 0, phase)
+
+    # -- polkit ------------------------------------------------------------
+
+    def _authorized(self, sender, action=ACTION_UPDATE):
+        try:
+            authority = dbus.Interface(
+                self._bus.get_object("org.freedesktop.PolicyKit1",
+                                     "/org/freedesktop/PolicyKit1/Authority"),
+                "org.freedesktop.PolicyKit1.Authority")
+            subject = ("system-bus-name",
+                       {"name": dbus.String(sender, variant_level=1)})
+            ok, _challenge, _details = authority.CheckAuthorization(
+                subject, action, {}, dbus.UInt32(1), "",
+                timeout=600)
+            return bool(ok)
+        except dbus.DBusException as e:
+            log("polkit check failed: %s" % e)
+            return False
+
+    def _require_auth(self, sender, action=ACTION_UPDATE):
+        if not self._authorized(sender, action):
+            raise NotAuthorizedError("polkit refused %s" % action)
+
+    # -- signals -----------------------------------------------------------
+
+    @dbus.service.signal(IFACE, signature="sis")
+    def Progress(self, phase, percent, message):
+        pass
+
+    @dbus.service.signal(IFACE, signature="ss")
+    def NewsReady(self, txn, text):
+        pass
+
+    @dbus.service.signal(IFACE, signature="s")
+    def DriftDetected(self, analysis_json):
+        pass
+
+    @dbus.service.signal(IFACE, signature="s")
+    def Finished(self, result_json):
+        pass
+
+    @dbus.service.signal(IFACE, signature="ib")
+    def UpdatesChanged(self, count, suppressed):
+        pass
+
+    @dbus.service.signal(dbus.PROPERTIES_IFACE, signature="sa{sv}as")
+    def PropertiesChanged(self, iface, changed, invalidated):
+        pass
+
+    # -- properties (the Software & Updates badge feed) --------------------
+
+    def _props(self):
+        count = self._analysis["update_count"] if self._analysis else 0
+        suppressed = bool(self._analysis and self._analysis["notify_suppressed"])
+        try:
+            version = open("/usr/share/shadowfetch/version").read().strip()
+        except OSError:
+            version = "unknown"
+        return {
+            "UpdateCount": dbus.Int32(count),
+            "NotifySuppressed": dbus.Boolean(suppressed),
+            "Busy": dbus.Boolean(self._phase != "idle"),
+            "Version": dbus.String(version),
+        }
+
+    @dbus.service.method(dbus.PROPERTIES_IFACE, in_signature="ss",
+                         out_signature="v")
+    def Get(self, iface, prop):
+        props = self._props()
+        if prop not in props:
+            raise InvalidArgsError("no such property: %s" % prop)
+        return props[prop]
+
+    @dbus.service.method(dbus.PROPERTIES_IFACE, in_signature="s",
+                         out_signature="a{sv}")
+    def GetAll(self, iface):
+        return self._props()
+
+    @dbus.service.method(dbus.PROPERTIES_IFACE, in_signature="ssv")
+    def Set(self, iface, prop, value):
+        raise PropertyReadOnlyError("Fireproof1 properties are read-only")
+
+    def _notify_badge(self):
+        props = self._props()
+        self.UpdatesChanged(props["UpdateCount"], props["NotifySuppressed"])
+        self.PropertiesChanged(IFACE, {"UpdateCount": props["UpdateCount"],
+                                       "NotifySuppressed": props["NotifySuppressed"]},
+                               [])
+
+    # -- Analyze: side-effect free, async ---------------------------------
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s",
+                         async_callbacks=("reply", "error"))
+    def Analyze(self, reply, error):
+        def work():
+            try:
+                analysis = build_analysis(self._state)
+                self._analysis = analysis
+                GLib.idle_add(self._notify_badge)
+                GLib.idle_add(reply, json.dumps(analysis))
+            except Exception as e:  # cache open can fail on broken lists
+                log("analyze failed: %s" % e)
+                GLib.idle_add(error, AnalyzeFailedError(str(e)))
+        threading.Thread(target=work, name="analyze", daemon=True).start()
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def GetState(self):
+        return json.dumps({
+            "phase": self._phase,
+            "analysis": self._analysis,
+            "last_txn": self._state.get("last_txn"),
+            "pending": self._read_pending(),
+        })
+
+    def _read_pending(self):
+        try:
+            with open(PENDING_FILE) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return None
+
+    # -- commit protocol ---------------------------------------------------
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="s",
+                         sender_keyword="sender")
+    def Update(self, expected_hash, sender=None):
+        self._require_auth(sender)
+        if not self._lock.acquire(blocking=False):
+            raise BusyError("an operation is running")
+        self._cancel_download.clear()
+        self._news_event.clear()
+        self._news_decision = None
+        threading.Thread(target=self._commit_worker, args=(str(expected_hash),),
+                         name="commit", daemon=True).start()
+        return "started"
+
+    # The commit-steering methods below carry the same polkit gate as
+    # Update (auth_admin_keep makes this free for the caller that just
+    # authorized): an unprivileged local user must not be able to answer
+    # the NEWS gate, abort an admin's update, or cancel a download.
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="",
+                         sender_keyword="sender")
+    def CancelDownload(self, sender=None):
+        # Cancel is honoured only during the download phase: nothing is
+        # installed yet and partial debs resume next time.
+        self._require_auth(sender)
+        self._cancel_download.set()
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="",
+                         sender_keyword="sender")
+    def ProceedCommit(self, sender=None):
+        self._require_auth(sender)
+        self._news_decision = True
+        self._news_event.set()
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="",
+                         sender_keyword="sender")
+    def AbortCommit(self, sender=None):
+        self._require_auth(sender)
+        self._news_decision = False
+        self._news_event.set()
+
+    def _commit_worker(self, expected_hash):
+        lock_fd = -1
+        result = {"ok": False, "stage": "start", "message": ""}
+        txn = {
+            "txn": str(uuid.uuid4()),
+            "started": now_iso(),
+            "started_epoch": time.time(),
+        }
+        try:
+            # 1. lock, politely: Discover/terminal apt may be mid-flight
+            self._set_phase("locking")
+            deadline = time.time() + 600
+            while True:
+                lock_fd = apt_pkg.get_lock(LOCK_FRONTEND, False)
+                if lock_fd >= 0:
+                    break
+                if time.time() > deadline:
+                    raise RuntimeError(
+                        "another package manager held the lock for 10 minutes")
+                self._emit_progress("lock-wait", 0,
+                                    "Another package manager is installing "
+                                    "something - Fireproof will continue when "
+                                    "it finishes")
+                time.sleep(3)
+
+            # 2. re-validate under the lock: the archive may have moved
+            self._set_phase("revalidating")
+            cache = apt.Cache(apt.progress.base.OpProgress())
+            cache.upgrade(dist_upgrade=True)
+            changes = cache.get_changes()
+            live_hash = change_set_hash(changes)
+            if live_hash != expected_hash:
+                os.close(lock_fd)
+                lock_fd = -1
+                analysis = build_analysis(self._state)
+                self._analysis = analysis
+                GLib.idle_add(self.DriftDetected, json.dumps(analysis))
+                result = {"ok": False, "stage": "drift",
+                          "message": "the update changed while you were "
+                                     "reading - review again"}
+                return
+            txn["hash"] = live_hash
+            txn["kernels"] = sorted(
+                p.name for p in changes
+                if p.name.startswith("linux-image-") and not p.marked_delete)
+            txn["nvidia"] = any("nvidia" in p.name for p in changes)
+
+            # 3. baselines BEFORE any mutation
+            txn["baseline_failed"] = failed_units()
+            pre_max = snapper_max_number()
+            txn["snapper_pre_max"] = pre_max
+
+            # 4. labeled download phase: THIS is where debs and NEWS arrive.
+            #    Explicit, post-consent, cancellable with nothing installed.
+            self._set_phase("downloading")
+            hosts = set()
+            try:
+                cache.fetch_archives(
+                    progress=SignalAcquireProgress(self._emit_progress,
+                                                   self._cancel_download,
+                                                   hosts))
+            except apt.cache.FetchCancelledException:
+                result = {"ok": False, "stage": "download",
+                          "message": "download cancelled - nothing was "
+                                     "installed, partial files resume next "
+                                     "time"}
+                return
+            txn["mirror_hosts"] = sorted(hosts)
+
+            # 5. NEWS gate: apt-listchanges over the fetched archives, shown
+            #    with a Proceed/Stop gate (the apt hook itself is frontend=log
+            #    so it can never block the live run)
+            self._set_phase("news")
+            debs = []
+            for pkg in changes:
+                if pkg.marked_delete or not pkg.candidate:
+                    continue
+                # NOT the pool basename: apt encodes the version (epoch
+                # included, 1:2.5-1 -> 1%3a2.5-1) into the cache filename.
+                fname = cached_deb_path(pkg.name, pkg.candidate.version,
+                                        pkg.candidate.architecture)
+                if os.path.exists(fname):
+                    debs.append(fname)
+            news_text = ""
+            if debs and shutil.which("apt-listchanges"):
+                rc, out, _ = run(["apt-listchanges", "--which=news",
+                                  "-f", "text"] + debs, timeout=120)
+                if rc == 0:
+                    news_text = out.strip()
+            if news_text:
+                GLib.idle_add(self.NewsReady, txn["txn"], news_text)
+                if not self._news_event.wait(timeout=600):
+                    result = {"ok": False, "stage": "news",
+                              "message": "no answer to the NEWS prompt in 10 "
+                                         "minutes - stopped with nothing "
+                                         "installed"}
+                    return
+                if not self._news_decision:
+                    result = {"ok": False, "stage": "news",
+                              "message": "stopped at the NEWS gate - nothing "
+                                         "was installed"}
+                    return
+
+            # 6. commit from cache. Non-interactive; cancel is disabled.
+            #    80snapper + 79phoenix-space wrap the dpkg calls in Phoenix
+            #    Points automatically - Fireproof adds ZERO snapshots.
+            self._set_phase("committing")
+            os.environ["DEBIAN_FRONTEND"] = "noninteractive"
+            apt_pkg.config.set("DPkg::Options::", "--force-confold")
+            try:
+                cache.commit(fetch_progress=SignalAcquireProgress(
+                                 self._emit_progress, threading.Event(), hosts),
+                             install_progress=SignalInstallProgress(
+                                 self._emit_progress))
+                commit_ok = True
+                commit_err = ""
+            except Exception as e:
+                commit_ok = False
+                commit_err = str(e)
+
+            # 7. name the rollback target: FIRST type=pre snapshot of the
+            #    transaction, then relabel it so grub-btrfsd and the Phoenix
+            #    panel both show the same Point
+            pre_point = snapper_first_pre_after(pre_max)
+            txn["pre_point"] = pre_point
+            if pre_point is not None:
+                kernnote = ""
+                if txn["kernels"]:
+                    kernnote = " (kernel %s -> %s, %d pkgs)" % (
+                        os.uname().release,
+                        _kernel_version_from_pkg(txn["kernels"][-1]) or "?",
+                        len(changes))
+                else:
+                    kernnote = " (%d pkgs)" % len(changes)
+                run(["snapper", "-c", "root", "modify",
+                     "-d", "Fireproof: before update %s%s"
+                           % (datetime.now().strftime("%Y-%m-%d %H:%M"),
+                              kernnote),
+                     "-u", "fireproof=pre,txn=%s" % txn["txn"],
+                     str(pre_point)], timeout=20)
+
+            # 8. pending flag BEFORE any reboot offer reaches the user
+            atomic_write(PENDING_FILE, json.dumps({
+                "txn": txn["txn"],
+                "pre_point": pre_point,
+                "written": now_iso(),
+                "kernels": txn["kernels"],
+            }) + "\n")
+
+            # 9. verify battery
+            self._set_phase("verifying")
+            verify = run_verify(txn)
+            if not commit_ok:
+                verify["verdict"] = "restore-recommended"
+                verify["checks"].insert(0, {
+                    "id": "commit", "label": "Package installation completed",
+                    "status": "fail", "detail": commit_err[:2000]})
+
+            # 10. bookkeeping for the rollback carousel
+            self._state["last_txn"] = {
+                "txn": txn["txn"], "hash": txn["hash"],
+                "date": now_iso(), "pre_point": pre_point,
+                "verdict": verify["verdict"], "kernels": txn["kernels"],
+            }
+            if verify["verdict"] == "restore-recommended":
+                self._record_failed_set(txn["hash"], "verify-failed")
+            save_state(self._state)
+
+            result = {"ok": commit_ok and
+                            verify["verdict"] != "restore-recommended",
+                      "stage": "done", "message": "",
+                      "verify": verify, "txn": txn["txn"],
+                      "pre_point": pre_point,
+                      "phoenix_available": phoenix_available()}
+        except Exception as e:
+            log("commit worker failed: %s" % e)
+            result = {"ok": False, "stage": self._phase, "message": str(e)}
+        finally:
+            if lock_fd >= 0:
+                try:
+                    os.close(lock_fd)
+                except OSError:
+                    pass
+            self._phase = "idle"
+            # refresh the badge (count normally drops to zero here)
+            try:
+                self._analysis = build_analysis(self._state)
+            except Exception:
+                pass
+            GLib.idle_add(self._notify_badge)
+            GLib.idle_add(self.Finished, json.dumps(result))
+            self._lock.release()
+            if self._quit_requested:
+                log("deferred stop: commit finished cleanly, exiting now")
+                GLib.idle_add(self._loop.quit)
+
+    def _record_failed_set(self, cs_hash, reason):
+        sets = [s for s in self._state.get("failed_sets", [])
+                if s.get("hash") != cs_hash]
+        sets.append({"hash": cs_hash, "date": now_iso(), "reason": reason})
+        self._state["failed_sets"] = sets[-16:]   # bounded history
+
+    # -- verify + rollback bookkeeping ------------------------------------
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s",
+                         async_callbacks=("reply", "error"))
+    def Verify(self, reply, error):
+        txn = self._state.get("last_txn") or {}
+        def work():
+            try:
+                GLib.idle_add(reply, json.dumps(run_verify(txn)))
+            except Exception as e:
+                GLib.idle_add(error, VerifyFailedError(str(e)))
+        threading.Thread(target=work, name="verify", daemon=True).start()
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def RollbackTarget(self):
+        """The Point the one rollback button restores: recorded pre-Point of
+        the last transaction. The restore itself is pkexec phoenix-restore -
+        Fireproof never re-implements it."""
+        last = self._state.get("last_txn")
+        pending = self._read_pending()
+        point = None
+        source = None
+        if pending and pending.get("pre_point") is not None:
+            point, source = pending["pre_point"], "pending"
+        elif last and last.get("pre_point") is not None:
+            point, source = last["pre_point"], "state"
+        return json.dumps({
+            "point": point,
+            "source": source,
+            "txn": (last or {}).get("txn"),
+            "command": ("pkexec /usr/libexec/phoenix-restore %s" % point
+                        if point is not None else None),
+            "phoenix_available": phoenix_available(),
+        })
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="b",
+                         sender_keyword="sender")
+    def RecordRollback(self, txn_id, sender=None):
+        """Bookkeeping after a user-driven phoenix-restore: remember the
+        rolled-back set so the same pending set re-analyzes as
+        'Don't proceed' and its login notification is suppressed.
+
+        Polkit-gated: an unprivileged caller could otherwise poison
+        failed_sets so a legitimate pending set permanently analyzes as
+        'Don't proceed' with its notification suppressed."""
+        self._require_auth(sender)
+        last = self._state.get("last_txn")
+        if not last or last.get("txn") != str(txn_id):
+            return False
+        self._record_failed_set(last["hash"], "rolled-back")
+        last["verdict"] = "rolled-back"
+        save_state(self._state)
+        try:
+            self._analysis = build_analysis(self._state)
+        except Exception:
+            pass
+        GLib.idle_add(self._notify_badge)
+        return True
+
+
+def main():
+    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    bus = dbus.SystemBus()
+    name = dbus.service.BusName(BUS_NAME, bus)
+    loop = GLib.MainLoop()
+    service = Fireproof(bus, loop)
+
+    def refresh_badge():
+        def work():
+            try:
+                service._analysis = build_analysis(service._state)
+                GLib.idle_add(service._notify_badge)
+            except Exception as e:
+                log("badge refresh failed: %s" % e)
+        if service._phase == "idle":
+            threading.Thread(target=work, name="badge", daemon=True).start()
+        return True
+
+    # initial badge shortly after start, then hourly. The package lists
+    # themselves refresh via APT::Periodic (85fireproof); this daemon never
+    # runs `apt update` and never talks to the network on its own.
+    GLib.timeout_add_seconds(10, lambda: (refresh_badge() and False))
+    GLib.timeout_add_seconds(3600, refresh_badge)
+
+    def on_stop_signal(*_a):
+        # NEVER abort dpkg mid-transaction: while the commit phase is
+        # running, defer the shutdown until the worker finishes (verify,
+        # pending flag and state save included), then exit via the
+        # worker's finally block. Everything else quits immediately.
+        if service._phase == "committing":
+            log("stop requested during commit - deferring until dpkg "
+                "finishes; the transaction will not be aborted")
+            service._quit_requested = True
+        else:
+            loop.quit()
+        return True   # keep the handler installed for repeat signals
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        GLib.unix_signal_add(GLib.PRIORITY_HIGH, sig, on_stop_signal)
+
+    # systemd readiness (Type=dbus keys on the bus name, but be explicit
+    # in the journal for the QEMU harness)
+    log("ready on %s" % BUS_NAME)
+    loop.run()
+    _ = name
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

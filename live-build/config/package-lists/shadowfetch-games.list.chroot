@@ -1,0 +1,11 @@
+# Shadowfetch gaming enhancers — added v1.3.1
+# Native, lightweight tools that make gaming better out of the box. Steam, Heroic,
+# Lutris, Bottles and Proton tools are offered as Flatpaks in the Welcome wizard
+# (no i386 multiarch needed — the Flatpak runtimes bundle their own 32-bit libraries).
+# NOTE: gamescope is NOT in trixie (pulled pre-release) — omitted; mangoapp covers the overlay.
+
+gamemode
+mangohud
+mangoapp
+vkbasalt
+goverlay

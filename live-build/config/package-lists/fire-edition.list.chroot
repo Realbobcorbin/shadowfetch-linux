@@ -1,0 +1,31 @@
+# Fire Edition 2.1.4 seed list. Base packages remain pinned to the verified snapshot.
+# Pillars
+power-profiles-daemon
+linux-cpupower
+gamemode
+# (lm-sensors, smartmontools, nvme-cli, python3-psutil/dbus/gi/apt, snapper,
+#  libsnapper7t64, inotify-tools, vulkan-tools, mesa-vulkan-drivers, pciutils,
+#  libnotify-bin, python3-pyqt6 already in the image)
+nvtop
+btop
+# Buzz is installed only after explicit first-run confirmation.
+# No second model runtime or model weights are carried in the ISO.
+# Fireproof analysis stack
+needrestart
+apt-listchanges
+# Privacy set moved INTO the base (Core bundle is the ISO itself)
+kleopatra
+tor
+tor-geoipdb
+torsocks
+onionshare
+onionshare-cli
+
+# The Fire Edition debs themselves (built into the umbra repo by this same make run)
+shadowfetch-ember
+shadowfetch-firewatchd
+shadowfetch-phoenix
+shadowfetch-menus
+shadowfetch-control-center
+shadowfetch-fireproof
+shadowfetch-hwscan

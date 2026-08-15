@@ -1,0 +1,27 @@
+{
+  "id": "ignition-creator",
+  "name": "Creator",
+  "kind": "preset",
+  "packages": [
+    "shotcut",
+    "kasts",
+    "elisa",
+    "haruna",
+    "mkvtoolnix",
+    "mkvtoolnix-gui",
+    "kid3",
+    "easytag",
+    "picard",
+    "ardour",
+    "ardour-data",
+    "darktable"
+  ],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 49400000,
+  "license": "Free software (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "ignition",
+  "blurb": "Video, music, podcasts and audio production: Shotcut, Elisa, Kasts, Haruna, MKVToolNix, the tagging tools, Ardour and darktable. One click, one install, wrapped in a Phoenix Point automatically."
+}

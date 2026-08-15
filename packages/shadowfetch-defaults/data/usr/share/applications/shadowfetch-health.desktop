@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Shadowfetch System Health
+Comment=Check storage, services, packages, graphics and local AI safety
+Exec=konsole -e bash -lc "shadowfetch-health; echo; read -r -p 'Press Enter to close...' _"
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=health;doctor;diagnostics;repair;

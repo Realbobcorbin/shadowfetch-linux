@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# grub.d scripts and the daemon must be executable; do not auto-enable the
+# service (firstboot enables it only on Btrfs roots).
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0755 debian/grub-btrfs/etc/grub.d/41_snapshots-btrfs
+	chmod 0755 debian/grub-btrfs/usr/bin/grub-btrfsd
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start grub-btrfsd.service

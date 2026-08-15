@@ -1,0 +1,504 @@
+#!/usr/bin/env python3
+"""shadowfetch-hwscan - one scanner, one fact file.
+
+Reads the hardware (unprivileged: sysfs, /proc, /usr/share/misc/pci.ids,
+plus exactly two time-boxed subprocesses: `vulkaninfo --json` and
+`nvidia-smi`) and produces the single JSON fact file every Shadowfetch
+surface reads: the Ignition AI Workstation card and the Control Center
+Local AI and Drivers pages.
+
+House rules:
+  * Capabilities at rest only. Firewatch owns every runtime number
+    (MemAvailable, live VRAM, tokens per second) - the two never
+    publish the same number.
+  * Every VRAM figure carries a source: sysfs and nvml-smi are
+    "measured", vulkan is "estimated", Intel iGPUs are "shared" and
+    never get a number, and anything else is honestly "unknown"
+    ("VRAM: measured after driver install").
+  * The verdict is a pure function of (CPU flags, cores, RAM, GPUs),
+    pinned by the fixture tests in tests/ - a wording change is a test
+    change. Buzz independently owns exact model ranking and download.
+  * Nothing here talks to the network. Both subprocesses are local,
+    read-only probes; failure or overrun means "unknown", never an
+    error.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+"""
+
+import argparse
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+SCHEMA = 1
+STATE_FILE = "/var/lib/shadowfetch/hwscan.json"
+PCI_IDS = "/usr/share/misc/pci.ids"
+VERSION_FILE = "/usr/share/shadowfetch/version"
+TIMEOUT_S = 3  # per subprocess; overrun or failure -> unknown
+
+# PCI display classes: VGA (0x0300xx), 3D (0x0302xx), other display (0x0380xx)
+GPU_PCI_CLASSES = ("0x0300", "0x0302", "0x0380")
+VENDOR_IDS = {0x10DE: "nvidia", 0x1002: "amd", 0x8086: "intel", 0x1AF4: "virtio"}
+
+NVIDIA_SMI_ARGV = ["nvidia-smi", "--query-gpu=name,memory.total",
+                   "--format=csv,noheader"]
+VULKANINFO_ARGV = ["vulkaninfo", "--json"]
+
+# --- verdict copy (judge-folded wording; changing these changes tests) ------
+GLOSS = " (a shorter conversation memory, or a more compressed model file)"
+S_CPU_LT6 = ("This machine is suited to speech-to-text and small assistant "
+             "models; larger chat models need more memory.")
+S_CPU_8 = ("Your system runs 4B models comfortably; 7B models run, but "
+           "slowly and with a small context.")
+S_CPU_16 = ("7B models run at a relaxed pace on your processor "
+            "— a graphics card is what makes them feel fast.")
+S_CPU_32 = ("Your system holds up to 13B models in memory — a GPU is "
+            "what makes 13B feel fast.")
+S_GPU_4 = "Your GPU makes 4B models fast; 7B models run partially offloaded."
+S_GPU_6 = ("Your GPU runs 7B models mostly offloaded — noticeably "
+           "faster than CPU alone.")
+# The founder's sentence, reserved for tiers where 7B is genuinely fast
+# (>= 8 GB VRAM full offload), with the mandatory plain-words gloss.
+S_GPU_8 = ("Your system can comfortably run 7B models. 13B models may "
+           "require reduced context or quantization" + GLOSS + ".")
+S_GPU_12 = ("Your GPU can comfortably run 13B models; 30B-class models can "
+            "run partially offloaded.")
+SFX_NO_AVX2 = "your CPU lacks AVX2; expect roughly half these speeds"
+SFX_LOW_CORE = "slower processor — expect well below typical speeds"
+SFX_NV_NO_DRIVER = ("GPU acceleration available after driver install "
+                    "— using CPU for now")
+
+
+def _read(path, default=""):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return default
+
+
+# --- CPU and RAM ------------------------------------------------------------
+
+def read_cpu(proc_root="/proc"):
+    """CPU model, physical cores, threads and the AI-relevant flag set."""
+    model, flags_line = "unknown", ""
+    for line in _read(os.path.join(proc_root, "cpuinfo")).splitlines():
+        low = line.lower()
+        if model == "unknown" and low.startswith("model name"):
+            model = line.split(":", 1)[1].strip()
+        elif not flags_line and low.startswith("flags"):
+            flags_line = line.split(":", 1)[1].strip()
+        if model != "unknown" and flags_line:
+            break
+    flagset = set(flags_line.split())
+    cores = threads = None
+    try:
+        import psutil
+        cores = psutil.cpu_count(logical=False)
+        threads = psutil.cpu_count(logical=True)
+    except Exception:
+        pass
+    if not threads:
+        threads = os.cpu_count() or 1
+    if not cores:
+        cores = threads
+    return {
+        "model": model,
+        "cores": cores,
+        "threads": threads,
+        "flags": {
+            "avx2": "avx2" in flagset,
+            "fma": "fma" in flagset,
+            "f16c": "f16c" in flagset,
+            "avx512f": "avx512f" in flagset,
+            "avx512_vnni": "avx512_vnni" in flagset,
+            "amx": "amx_tile" in flagset,
+        },
+    }
+
+
+def read_ram_gb(proc_root="/proc"):
+    """MemTotal only. MemAvailable is Firewatch's number, never ours."""
+    for line in _read(os.path.join(proc_root, "meminfo")).splitlines():
+        if line.startswith("MemTotal:"):
+            try:
+                return round(int(line.split()[1]) / (1024 * 1024), 1)
+            except (IndexError, ValueError):
+                return 0.0
+    return 0.0
+
+
+# --- GPU discovery (pure sysfs) ---------------------------------------------
+
+def pci_names(vendor, device, ids_path=PCI_IDS):
+    """Resolve (vendor_name, device_name) from pci.ids; None when absent."""
+    vhex, dhex = "%04x" % vendor, "%04x" % device
+    vname = dname = None
+    try:
+        with open(ids_path, "r", encoding="utf-8", errors="replace") as fh:
+            in_vendor = False
+            for line in fh:
+                if not line.strip() or line.startswith("#"):
+                    continue
+                if not line.startswith("\t"):
+                    if in_vendor:
+                        break  # left our vendor block (or hit the class list)
+                    if line[:4].lower() == vhex:
+                        vname = line[4:].strip()
+                        in_vendor = True
+                elif in_vendor and not line.startswith("\t\t"):
+                    entry = line.strip()
+                    if entry[:4].lower() == dhex:
+                        dname = entry[4:].strip()
+                        break
+    except OSError:
+        pass
+    return vname, dname
+
+
+def scan_gpus(sys_root="/sys", ids_path=PCI_IDS):
+    """Every PCI display device, honestly labeled. No subprocesses here."""
+    gpus = []
+    for dev in sorted(glob.glob(os.path.join(sys_root, "bus/pci/devices/*"))):
+        pci_class = _read(os.path.join(dev, "class")).strip().lower()
+        if not any(pci_class.startswith(p) for p in GPU_PCI_CLASSES):
+            continue
+        try:
+            vendor = int(_read(os.path.join(dev, "vendor")).strip(), 16)
+            device = int(_read(os.path.join(dev, "device")).strip(), 16)
+        except ValueError:
+            continue
+        driver = "none"
+        try:
+            driver = os.path.basename(
+                os.readlink(os.path.join(dev, "driver")))
+        except OSError:
+            pass
+        vendor_short = VENDOR_IDS.get(vendor, "0x%04x" % vendor)
+        vname, dname = pci_names(vendor, device, ids_path)
+        if vendor_short == "virtio":
+            name = "virtio (virtual)"
+        elif dname:
+            name = dname
+        elif vname:
+            name = vname + " GPU"
+        else:
+            name = "GPU %04x:%04x" % (vendor, device)
+        gpu = {
+            "addr": os.path.basename(dev),
+            "vendor": vendor_short,
+            "name": name,
+            "driver": driver,
+            "vram_gb": None,
+            "vram_source": "unknown",
+            "flags": [],
+        }
+        if vendor_short == "amd":
+            # Exact bytes from amdgpu sysfs -> "measured".
+            raw = _read(os.path.join(dev, "mem_info_vram_total")).strip()
+            if raw.isdigit():
+                gpu["vram_gb"] = round(int(raw) / (1024 ** 3), 1)
+                gpu["vram_source"] = "sysfs"
+        elif vendor_short == "intel":
+            # iGPUs share system RAM - never a number (Arc lmem: roadmap).
+            gpu["vram_source"] = "shared"
+        if vendor_short == "nvidia" and driver in ("nouveau", "none"):
+            gpu["flags"].append("missing-driver")
+        gpus.append(gpu)
+    return gpus
+
+
+# --- the two time-boxed probes ----------------------------------------------
+
+def run_boxed(argv, timeout_s=TIMEOUT_S):
+    """Run a local read-only probe. Any failure or overrun -> None."""
+    if shutil.which(argv[0]) is None:
+        return None
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True,
+                              timeout=timeout_s)
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
+def _heap_device_local_bytes(heaps):
+    total = 0
+    for heap in heaps:
+        if not isinstance(heap, dict):
+            continue
+        size = heap.get("size", 0)
+        if isinstance(size, str):
+            try:
+                size = int(size, 0)
+            except ValueError:
+                continue
+        flags = heap.get("flags", 0)
+        if isinstance(flags, int):
+            local = bool(flags & 1)  # VK_MEMORY_HEAP_DEVICE_LOCAL_BIT
+        elif isinstance(flags, (list, tuple)):
+            local = any("DEVICE_LOCAL" in str(f) for f in flags)
+        else:
+            local = "DEVICE_LOCAL" in str(flags)
+        if local and isinstance(size, int) and size > 0:
+            total += size
+    return total
+
+
+def parse_vulkaninfo(text):
+    """-> [{vendor_id, name, vram_gb}] summing DEVICE_LOCAL heaps.
+
+    Tolerant of both the classic per-GPU layout and the VK-profiles
+    layout; the exact behaviour is pinned by fixtures in tests/.
+    Garbage or None -> [].
+    """
+    try:
+        doc = json.loads(text)
+    except (TypeError, ValueError):
+        return []
+    heap_sets, props = [], []
+
+    def walk(node):
+        if isinstance(node, dict):
+            heaps = node.get("memoryHeaps")
+            if isinstance(heaps, list):
+                local = _heap_device_local_bytes(heaps)
+                if local:
+                    heap_sets.append(local)
+            if "deviceName" in node:
+                vid = node.get("vendorID")
+                if isinstance(vid, str):
+                    try:
+                        vid = int(vid, 0)
+                    except ValueError:
+                        vid = None
+                props.append({"vendor_id": vid,
+                              "name": str(node.get("deviceName"))})
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(doc)
+    rows = []
+    for i, local in enumerate(heap_sets):
+        prop = props[i] if i < len(props) else {"vendor_id": None, "name": None}
+        rows.append({"vendor_id": prop["vendor_id"], "name": prop["name"],
+                     "vram_gb": round(local / (1024 ** 3), 1)})
+    return rows
+
+
+def parse_nvidia_smi(text):
+    """Parse `nvidia-smi --query-gpu=name,memory.total --format=csv,noheader`
+    - the retained CSV pattern, no NVML bindings."""
+    rows = []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        name, _, mem = line.rpartition(",")
+        match = re.search(r"([\d.]+)\s*(MiB|GiB)", mem)
+        if not name or not match:
+            continue
+        value = float(match.group(1))
+        gb = value / 1024.0 if match.group(2) == "MiB" else value
+        rows.append({"name": name.strip(), "vram_gb": round(gb, 1)})
+    return rows
+
+
+def resolve_vram(gpus, runner=run_boxed):
+    """Fill vram_gb/vram_source per the honest split, and set vulkan-ok.
+
+    Order: NVIDIA post-driver via nvidia-smi ("measured"), then one
+    vulkaninfo attempt for whatever is still unknown ("estimated").
+    Software rasterizers (llvmpipe/swrast) never produce an estimate.
+    """
+    post_driver = [g for g in gpus
+                   if g["vendor"] == "nvidia" and g["driver"] == "nvidia"]
+    if post_driver:
+        for gpu, row in zip(post_driver,
+                            parse_nvidia_smi(runner(NVIDIA_SMI_ARGV))):
+            gpu["vram_gb"] = row["vram_gb"]
+            gpu["vram_source"] = "nvml-smi"
+    if not gpus:
+        return
+    id_map = {0x10DE: "nvidia", 0x1002: "amd", 0x8086: "intel"}
+    for row in parse_vulkaninfo(runner(VULKANINFO_ARGV)):
+        name = (row["name"] or "").lower()
+        if "llvmpipe" in name or "swrast" in name:
+            continue
+        vendor = id_map.get(row["vendor_id"])
+        if vendor is not None:
+            candidates = [g for g in gpus if g["vendor"] == vendor]
+        elif len(gpus) == 1:
+            candidates = gpus
+        else:
+            candidates = []
+        target = next((g for g in candidates
+                       if "vulkan-ok" not in g["flags"]), None)
+        if target is None:
+            continue
+        target["flags"].append("vulkan-ok")
+        if target["vram_source"] == "unknown" and row["vram_gb"]:
+            target["vram_gb"] = row["vram_gb"]
+            target["vram_source"] = "vulkan"
+
+
+# --- the deterministic rule table -------------------------------------------
+
+def cpu_verdict(ram_gb, cores, avx2):
+    """CPU-only summary, including the no-AVX2 and low-core folds."""
+    if ram_gb < 6:
+        sentence = S_CPU_LT6
+    elif ram_gb < 12:
+        sentence = S_CPU_8
+    elif ram_gb < 24:
+        sentence = S_CPU_16
+    else:
+        sentence = S_CPU_32
+    suffixes = []
+    if not avx2:
+        suffixes.append(SFX_NO_AVX2)
+    if cores is not None and cores < 6:
+        suffixes.append(SFX_LOW_CORE)
+    return sentence, suffixes
+
+
+def build_verdict(cpu, ram_gb, gpus):
+    """Pure function: (cpu, ram, gpus) -> verdict dict. Fixture-pinned."""
+    avx2 = bool(cpu["flags"]["avx2"])
+    cores = cpu.get("cores")
+    cpu_sentence, cpu_suffixes = cpu_verdict(ram_gb, cores, avx2)
+    # A GPU counts for offload only with a working driver and a sourced
+    # number >= 4 GB. NVIDIA-without-driver stays on CPU rules (folded).
+    offload = [g for g in gpus
+               if g["vram_gb"] and g["vram_gb"] >= 4
+               and "missing-driver" not in g["flags"]
+               and g["vram_source"] in ("sysfs", "nvml-smi", "vulkan")]
+    suffixes = []
+    if offload:
+        vram = max(g["vram_gb"] for g in offload)
+        if vram >= 12:
+            sentence = S_GPU_12
+        elif vram >= 8:
+            sentence = S_GPU_8
+        elif vram >= 6:
+            sentence = S_GPU_6
+        else:
+            sentence = S_GPU_4
+    else:
+        sentence = cpu_sentence
+        suffixes.extend(cpu_suffixes)
+    if any("missing-driver" in g["flags"] for g in gpus):
+        suffixes.append(SFX_NV_NO_DRIVER)
+    return {
+        "sentence": sentence,
+        "suffixes": suffixes,
+        # Retained as an empty compatibility field for 2.1.x consumers. Buzz's
+        # native hardware survey is the sole owner of exact model ranking.
+        "badges": {},
+    }
+
+
+# --- report assembly, output ------------------------------------------------
+
+def build_report(proc_root="/proc", sys_root="/sys", ids_path=PCI_IDS,
+                 runner=run_boxed):
+    cpu = read_cpu(proc_root)
+    ram_gb = read_ram_gb(proc_root)
+    gpus = scan_gpus(sys_root, ids_path)
+    resolve_vram(gpus, runner)
+    return {
+        "schema": SCHEMA,
+        "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "cpu": cpu,
+        "ram_gb": ram_gb,
+        "gpus": gpus,
+        "verdict": build_verdict(cpu, ram_gb, gpus),
+    }
+
+
+def write_state(report, path=STATE_FILE):
+    """Atomic, world-readable by contract: every surface reads this file."""
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(report, fh, indent=1)
+        fh.write("\n")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def _vram_line(gpu):
+    source = gpu["vram_source"]
+    if source == "shared":
+        return "shares system RAM"
+    if source == "unknown":
+        return "VRAM: measured after driver install"
+    label = "estimated" if source == "vulkan" else "measured"
+    return "VRAM %s GB (%s)" % (gpu["vram_gb"], label)
+
+
+def human_report(report):
+    cpu = report["cpu"]
+    lines = ["Shadowfetch hardware scan (%s)" % report["scanned_at"],
+             "  CPU: %s — %d cores / %d threads" %
+             (cpu["model"], cpu["cores"], cpu["threads"]),
+             "  CPU flags: " + (", ".join(
+                 k for k, v in sorted(cpu["flags"].items()) if v) or "none"),
+             "  RAM: %s GB" % report["ram_gb"]]
+    if report["gpus"]:
+        for gpu in report["gpus"]:
+            flags = (" [" + ", ".join(gpu["flags"]) + "]") if gpu["flags"] else ""
+            lines.append("  GPU %s: %s — driver %s, %s%s" %
+                         (gpu["addr"], gpu["name"], gpu["driver"],
+                          _vram_line(gpu), flags))
+    else:
+        lines.append("  GPU: none detected")
+    verdict = report["verdict"]
+    lines.append("Verdict: " + verdict["sentence"])
+    for suffix in verdict["suffixes"]:
+        lines.append("  note: " + suffix)
+    lines.append("Model selection: managed by Buzz in Settings > Compute")
+    return "\n".join(lines)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="shadowfetch-hwscan",
+        description="Read the hardware and tell the truth: what runs "
+                    "comfortably, what runs slowly, and what to skip. "
+                    "Unprivileged; no network.")
+    parser.add_argument("--json", action="store_true",
+                        help="print the fact file JSON to stdout")
+    parser.add_argument("--write-state", nargs="?", const=STATE_FILE,
+                        metavar="PATH",
+                        help="write the fact file atomically (default %s); "
+                             "used by shadowfetch-hwscan.service" % STATE_FILE)
+    parser.add_argument("--version", action="version",
+                        version="shadowfetch-hwscan (Shadowfetch Linux) " +
+                                (_read(VERSION_FILE).strip() or "unknown"))
+    args = parser.parse_args(argv)
+    report = build_report()
+    if args.write_state:
+        write_state(report, args.write_state)
+        return 0
+    if args.json:
+        print(json.dumps(report, indent=1))
+        return 0
+    print(human_report(report))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

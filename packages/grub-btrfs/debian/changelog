@@ -1,0 +1,14 @@
+grub-btrfs (4.14-2) umbra; urgency=medium
+
+  * Ship the initramfs-tools overlay hook + local-bottom script so read-only
+    snapper snapshots boot as tmpfs-overlay sessions ("Last Known Good Flame").
+  * /etc/default/grub-btrfs/config: submenu titled "Last Known Good Flame".
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 30 Jul 2026 18:13:52 -0400
+
+grub-btrfs (4.14-1shadowfetch1) unstable; urgency=medium
+
+  * Vendored upstream v4.14 for Shadowfetch Linux 2.0.0 "Bedrock" (boot-to-snapshot).
+  * grub-btrfs is not currently in Debian testing; shipped from the Shadowfetch repo.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Tue, 21 Jul 2026 16:48:14 -0400

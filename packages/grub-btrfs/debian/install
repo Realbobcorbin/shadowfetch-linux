@@ -1,0 +1,9 @@
+41_snapshots-btrfs     etc/grub.d/
+config                 etc/default/grub-btrfs/
+grub-btrfsd            usr/bin/
+grub-btrfsd.service    usr/lib/systemd/system/
+LICENSE                usr/share/doc/grub-btrfs/
+README.md              usr/share/doc/grub-btrfs/
+usr/share/initramfs-tools/hooks/grub-btrfs-overlay usr/share/initramfs-tools/hooks
+usr/share/initramfs-tools/scripts/local-bottom/grub-btrfs-overlay usr/share/initramfs-tools/scripts/local-bottom
+etc/default/grub-btrfs/config etc/default/grub-btrfs

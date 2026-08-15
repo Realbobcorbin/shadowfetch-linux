@@ -1,0 +1,46 @@
+# Shadowfetch Linux - Umbra GRUB theme (graphite + gold)
+title-text: ""
+desktop-image: "background.png"
+desktop-color: "#0A0D11"
+terminal-font: "DejaVu Sans Regular 18"
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
+
++ boot_menu {
+    left = 16%
+    width = 68%
+    top = 30%
+    height = 48%
+    item_font = "DejaVu Sans Regular 18"
+    item_color = "#9AA3AD"
+    selected_item_font = "DejaVu Sans Regular 18"
+    selected_item_color = "#E8B65E"
+    item_height = 40
+    item_padding = 8
+    item_spacing = 10
+    scrollbar = false
+}
+
++ label {
+    top = 80%
+    left = 0
+    width = 100%
+    align = "center"
+    color = "#D8A24A"
+    font = "DejaVu Sans Bold 24"
+    text = "Privacy, Power, and Precision from the Depths"
+}
+
++ progress_bar {
+    id = "__timeout__"
+    left = 16%
+    width = 68%
+    top = 88%
+    height = 14
+    show_text = false
+    fg_color = "#D8A24A"
+    bg_color = "#161A20"
+    border_color = "#2C333B"
+}

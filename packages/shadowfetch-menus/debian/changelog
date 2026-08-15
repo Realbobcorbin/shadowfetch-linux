@@ -1,0 +1,39 @@
+shadowfetch-menus (2.1.4-1) umbra; urgency=high
+
+  * Keep the seven-section Fire Edition launcher while replacing AI and Agents
+    with a focused Local AI section led by Buzz.
+  * Exclude Local AI launchers from Develop and System so every entry has one
+    predictable home.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sat, 08 Aug 2026 11:32:00 -0400
+
+shadowfetch-menus (2.1.3-1) unstable; urgency=high
+
+  * Version bump to match the 2.1.3 release. No functional changes in this
+    package. 2.1.3 is a security/stability release fixing a critical Calamares
+    installer bug (sf-remove-live-user, see shadowfetch-branding 2.1.3-1) and a
+    first-boot-on-live-session bug (see shadowfetch-defaults 2.1.3-1).
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sun, 02 Aug 2026 10:22:06 -0400
+shadowfetch-menus (2.1.2-1) unstable; urgency=medium
+
+  * Initial release, for Shadowfetch Linux 2.1.2 "Fire Edition".
+  * Seven-category launcher as an XDG merge-dir drop-in
+    (/etc/xdg/menus/applications-merged/shadowfetch-launcher.menu):
+    Create, Develop, Communicate, Play, Protect, System, AI and Agents.
+    The stock top-level menus are deleted in the merge; the Lost & Found
+    (OnlyUnallocated) catch-all is preserved, and the QEMU gate for the
+    release is that it stays empty over the full ISO app set.
+  * The merge-dir route is deliberate: startplasma sets XDG_MENU_PREFIX
+    unconditionally and kservice hardcodes applications-merged/, so an
+    own-prefix menu file can never be reached. kmenuedit user edits
+    always win over this drop-in (stock DefaultMergeDirs merges before
+    the kmenuedit MergeFile), and plasma-workspace's conffile is never
+    touched.
+  * Seven matching .directory files in /usr/share/desktop-directories.
+  * The /usr/local/share/applications duplicate-cleanup overrides ride
+    the ISO's live-build includes.chroot, not this package: Debian
+    policy keeps /usr/local out of debs, and the admin namespace is what
+    makes the overrides survive package upgrades.
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 30 Jul 2026 10:47:33 -0400

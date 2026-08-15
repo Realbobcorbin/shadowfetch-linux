@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Machine-readable and human-readable Shadowfetch health audit."""
+
+import argparse
+import json
+import os
+import shutil
+import socket
+import stat
+import subprocess
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+
+@dataclass
+class Check:
+    name: str
+    status: str
+    summary: str
+    action: str = ""
+
+
+def run(command, timeout=8):
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+        return result.returncode, result.stdout.strip(), result.stderr.strip()
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return 127, "", str(error)
+
+
+def command_check(name, binary, optional=True):
+    path = shutil.which(binary)
+    if path:
+        return Check(name, "pass", f"Available at {path}")
+    return Check(name, "info" if optional else "warn", "Not installed", f"Run the matching Shadowfetch setup tool for {binary}.")
+
+
+def port_exposure():
+    code, output, _ = run(["ss", "-ltnH"], 5)
+    if code != 0:
+        return Check("Local AI network exposure", "info", "Socket status unavailable")
+    watched = {"3000": "Buzz relay", "9337": "Buzz shared compute"}
+    exposed = []
+    for line in output.splitlines():
+        local = line.split()[3] if len(line.split()) > 3 else ""
+        for port, label in watched.items():
+            if local.endswith(f":{port}") and not (local.startswith("127.0.0.1:") or local.startswith("[::1]:")):
+                exposed.append(f"{label} on {local}")
+    if exposed:
+        return Check("Local AI network exposure", "warn", "; ".join(exposed), "Bind Buzz services to localhost unless remote access is intentional, authenticated and protected by TLS.")
+    return Check("Local AI network exposure", "pass", "Buzz service ports are closed or loopback-only")
+
+
+def buzz_compute_health():
+    code, output, error = run(
+        ["curl", "-fsS", "--max-time", "3", "http://127.0.0.1:9337/v1/models"],
+        5,
+    )
+    if code != 0:
+        return Check(
+            "Buzz shared compute",
+            "info",
+            "Not enabled",
+            "Open Buzz and enable Share this machine in Settings > Compute to download and serve an open model.",
+        )
+    try:
+        payload = json.loads(output)
+        rows = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            raise ValueError("missing data list")
+        models = [row.get("id") for row in rows
+                  if isinstance(row, dict) and isinstance(row.get("id"), str)]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return Check(
+            "Buzz shared compute",
+            "warn",
+            "The local model endpoint returned malformed data",
+            "Restart Buzz, then run shadowfetch-agent-doctor.",
+        )
+    summary = f"Ready with {len(models)} model(s)" if models else "Ready; no model is currently advertised"
+    return Check("Buzz shared compute", "pass", summary)
+
+
+def secret_permissions():
+    roots = [Path.home() / ".config" / "shadowfetch" / "buzz",
+             Path.home() / ".local" / "share" / "shadowfetch" / "buzz"]
+    risky = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file() or path.name not in {".env", "client.env"}:
+                continue
+            try:
+                mode = stat.S_IMODE(path.stat().st_mode)
+                if mode & 0o077:
+                    risky.append(str(path.relative_to(Path.home())))
+            except OSError:
+                pass
+    if risky:
+        return Check("Buzz credential permissions", "warn", f"{len(risky)} sensitive configuration file(s) are readable by other users", "Run shadowfetch-agent-doctor --fix-permissions.")
+    return Check("Buzz credential permissions", "pass", "Sensitive Buzz configuration is private")
+
+
+def collect(quick=False):
+    checks = []
+    disk = shutil.disk_usage("/")
+    disk_used = round(disk.used / disk.total * 100)
+    disk_free_gib = disk.free / 1024**3
+    checks.append(Check("System disk", "warn" if disk_used >= 90 else "pass", f"{disk_used}% used · {disk_free_gib:.1f} GiB free", "Free at least 10 GiB before a large update." if disk_used >= 90 else ""))
+
+    memory = {}
+    for line in Path("/proc/meminfo").read_text().splitlines():
+        key, value = line.split(":", 1)
+        memory[key] = int(value.strip().split()[0])
+    available_gib = memory.get("MemAvailable", 0) / 1024**2
+    checks.append(Check("Memory", "warn" if available_gib < 1 else "pass", f"{available_gib:.1f} GiB available"))
+
+    load = os.getloadavg()[0]
+    cpu = os.cpu_count() or 1
+    checks.append(Check("CPU load", "warn" if load > cpu * 1.5 else "pass", f"1-minute load {load:.2f} across {cpu} threads"))
+
+    _, failed, _ = run(["systemctl", "--failed", "--no-legend", "--plain"])
+    failed_count = len([line for line in failed.splitlines() if line.strip()])
+    checks.append(Check("System services", "warn" if failed_count else "pass", f"{failed_count} failed unit(s)", "Run systemctl --failed for details." if failed_count else ""))
+
+    code, audit, _ = run(["dpkg", "--audit"], 15)
+    packages_ok = code == 0 and not audit
+    checks.append(Check("Package database", "pass" if packages_ok else "warn", "Consistent" if packages_ok else "Needs repair", "" if packages_ok else "Run sudo dpkg --configure -a, then shadowfetch-update."))
+
+    if not quick:
+        code, output, error = run(["curl", "-fsSIL", "--max-time", "8", "https://www.shadowfetch.com/linux/apt/dists/umbra/InRelease"], 12)
+        checks.append(Check("Update channel", "pass" if code == 0 else "warn", "Reachable and signed metadata is available" if code == 0 else (error or "Unreachable"), "Check the network and system clock." if code else ""))
+
+    checks.extend([
+        command_check("Buzz Desktop", "buzz-desktop"),
+        command_check("Buzz CLI", "buzz"),
+        command_check("Buzz agent runtime", "buzz-agent"),
+        command_check("Container sandbox", "podman"),
+        buzz_compute_health(),
+        port_exposure(),
+        secret_permissions(),
+    ])
+    return checks
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Check Shadowfetch system and local AI health")
+    parser.add_argument("--json", action="store_true", help="emit structured JSON")
+    # Same file every other tool reports from, so a bug report cannot cite a
+    # version the system itself disagrees with.
+    _vf = "/usr/share/shadowfetch/version"
+    _v = open(_vf).read().strip() if os.path.exists(_vf) else "unknown"
+    parser.add_argument("--version", action="version",
+                        version=f"shadowfetch-health (Shadowfetch Linux) {_v}")
+    parser.add_argument("--quick", action="store_true", help="skip network checks")
+    args = parser.parse_args()
+    checks = collect(args.quick)
+    counts = {status: sum(item.status == status for item in checks) for status in ("pass", "warn", "fail", "info")}
+    if args.json:
+        print(json.dumps({"version": 1, "hostname": socket.gethostname(), "summary": counts, "checks": [asdict(item) for item in checks]}, indent=2))
+    else:
+        print("Shadowfetch System Health")
+        print("=" * 64)
+        glyph = {"pass": "OK", "warn": "!!", "fail": "XX", "info": "--"}
+        for item in checks:
+            print(f"[{glyph[item.status]}] {item.name}: {item.summary}")
+            if item.action:
+                print(f"     Next: {item.action}")
+        print("=" * 64)
+        print(f"{counts['pass']} healthy · {counts['warn']} warnings · {counts['fail']} failures · {counts['info']} optional")
+    return 2 if counts["fail"] else (1 if counts["warn"] else 0)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

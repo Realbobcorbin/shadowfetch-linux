@@ -1,0 +1,40 @@
+#!/bin/sh
+# shadowfetch-ember-session - session-side Ember helper.
+#
+# Runs once at login (etc/xdg/autostart). If Ember Mode is active when the
+# user logs in - for example after a re-login during a long Ember run - it
+# suspends Baloo file indexing in this session, matching what the Ember page
+# does when the switch is flipped. Baloo is user-scope, so the root daemon
+# cannot do this; this two-line helper is the whole job.
+#
+# It never starts Ember, never talks to the network, and exits immediately.
+
+# ---- --help / --version, BEFORE any side effect -----------------------------
+# This block is deliberately the first thing that runs. Someone asking a
+# command what it does should never thereby cause it to do the thing.
+case "${1:-}" in
+  -h|--help)
+    cat <<'SFHELP'
+shadowfetch-ember-session - session-side Ember Mode helper.
+
+USAGE
+  shadowfetch-ember-session    run the login check (autostart does this)
+
+WHAT IT DOES
+  If Ember Mode (shadowfetch-ember.service) is active at login, suspends
+  Baloo file indexing for this session so re-logging in during Ember keeps
+  indexing paused. Does nothing otherwise. Never starts Ember itself.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+    exit 0 ;;
+  --version)
+    echo "shadowfetch-ember-session (Shadowfetch Linux) $(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"; exit 0 ;;
+esac
+
+if systemctl is-active --quiet shadowfetch-ember.service 2>/dev/null; then
+    if command -v balooctl6 >/dev/null 2>&1; then
+        balooctl6 suspend >/dev/null 2>&1 || true
+    fi
+fi
+exit 0

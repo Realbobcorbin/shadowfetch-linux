@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=XTerm
+GenericName=Terminal emulator
+Comment=Standard terminal emulator for the X Window System
+Exec=xterm
+TryExec=xterm
+Icon=xterm-color_48x48
+Terminal=false
+Categories=System;TerminalEmulator;
+# Shadowfetch launcher cleanup: Konsole is the terminal.  xterm stays
+# installed; this override only removes the duplicate menu entry.
+NoDisplay=true
+Keywords=shell;prompt;command;commandline;cmd;

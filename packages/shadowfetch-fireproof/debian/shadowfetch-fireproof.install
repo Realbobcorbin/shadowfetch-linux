@@ -1,0 +1,17 @@
+data/usr/libexec/fireproofd                                          usr/libexec/
+data/usr/libexec/fireproof-postboot                                  usr/libexec/
+data/usr/libexec/fireproof-session-check                             usr/libexec/
+data/usr/bin/fireproof                                               usr/bin/
+data/usr/bin/shadowfetch-fireproof                                   usr/bin/
+data/usr/lib/systemd/system/fireproofd.service                       usr/lib/systemd/system/
+data/usr/lib/systemd/system/fireproof-postboot.service               usr/lib/systemd/system/
+data/usr/lib/systemd/system/fireproof-postboot.timer                 usr/lib/systemd/system/
+data/usr/share/dbus-1/system-services/org.shadowfetch.Fireproof1.service  usr/share/dbus-1/system-services/
+data/usr/share/dbus-1/system.d/org.shadowfetch.Fireproof1.conf       usr/share/dbus-1/system.d/
+data/usr/share/polkit-1/actions/org.shadowfetch.fireproof.policy     usr/share/polkit-1/actions/
+data/usr/share/shadowfetch/fireproof/issue-recovery.template         usr/share/shadowfetch/fireproof/
+data/usr/share/applications/shadowfetch-fireproof.desktop            usr/share/applications/
+data/etc/apt/apt.conf.d/85fireproof                                  etc/apt/apt.conf.d/
+data/etc/apt/listchanges.conf.d/shadowfetch-fireproof.conf           etc/apt/listchanges.conf.d/
+data/etc/xdg/autostart/shadowfetch-fireproof-check.desktop           etc/xdg/autostart/
+data/usr/share/shadowfetch/control-center/sfcc/fireproof_page.py     usr/share/shadowfetch/control-center/sfcc/

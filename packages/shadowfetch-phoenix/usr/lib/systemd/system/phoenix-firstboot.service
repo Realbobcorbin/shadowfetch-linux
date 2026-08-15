@@ -1,0 +1,22 @@
+[Unit]
+Description=Phoenix Recovery first-boot setup (snapper config, cleanup timer, grub-btrfsd)
+Documentation=https://shadowfetch.com/linux/
+# Same live-media guard as shadowfetch-firstboot.service: booting the USB to
+# look at the distro must never create a snapper config on the visitor's
+# machine. Also never arm while riding a read-only Point (overlay session).
+ConditionPathExists=!/var/lib/shadowfetch/phoenix-firstboot.done
+ConditionPathExists=!/run/live/medium
+ConditionPathExists=!/run/live/rootfs
+ConditionPathExists=!/run/phoenix-overlay
+After=local-fs.target
+# The snapper config must exist before the first apt transaction of the
+# session can be wrapped in Points, but nothing hard-orders apt after us:
+# 80snapper is a silent no-op until the config appears (by design).
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/phoenix-firstboot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

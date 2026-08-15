@@ -1,0 +1,10 @@
+# Shadowfetch Linux — builder/dev stack (1.5.0): debug, lint, env, containers, remote.
+# Complements the already-baked build-essential/git/gdb/distrobox/wl-clipboard.
+shellcheck
+direnv
+hyperfine
+yq
+podman-docker
+podman-compose
+input-remapper
+openssh-server

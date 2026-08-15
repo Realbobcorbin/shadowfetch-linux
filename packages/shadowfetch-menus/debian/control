@@ -1,0 +1,26 @@
+Source: shadowfetch-menus
+Section: misc
+Priority: optional
+Maintainer: Shadowfetch Project <signing@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://shadowfetch.com/linux/
+
+Package: shadowfetch-menus
+Architecture: all
+Depends:
+ ${misc:Depends}
+Recommends:
+ plasma-workspace
+Description: Shadowfetch seven-category application launcher
+ XDG menu merge-dir drop-in that replaces the stock top-level launcher
+ categories with the seven Shadowfetch sections: Create, Develop,
+ Communicate, Play, Protect, System, and AI and Agents, plus the
+ preserved Lost & Found (OnlyUnallocated) catch-all so no application
+ can ever disappear from the menu.
+ .
+ Ships /etc/xdg/menus/applications-merged/shadowfetch-launcher.menu and
+ the seven matching .directory files. plasma-workspace's own menu
+ conffile is never touched, and kmenuedit user edits always win over
+ this file (the stock DefaultMergeDirs merge happens before the
+ kmenuedit MergeFile merge).

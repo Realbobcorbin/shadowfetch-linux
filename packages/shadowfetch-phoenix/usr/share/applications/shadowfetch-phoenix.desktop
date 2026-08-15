@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Phoenix Recovery
+Comment=Phoenix Points, rollback, desktop reset and system repair
+Exec=shadowfetch-control --page recover
+Icon=shadowfetch
+Terminal=false
+Categories=System;
+Keywords=snapshot;rollback;restore;recovery;phoenix;repair;
+StartupNotify=true

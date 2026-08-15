@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=ImageMagick (display Q16)
+GenericName=Image viewer
+Comment=Display and browse images
+Exec=/usr/bin/display-im6.q16 %f
+TryExec=/usr/bin/display-im6.q16
+Icon=display-im6.q16
+Terminal=false
+Categories=Graphics;Viewer;
+# Shadowfetch launcher cleanup: Gwenview covers image viewing in the menu;
+# ImageMagick stays installed as a utility.  NoDisplay (never Hidden)
+# keeps the MIME associations below working.
+NoDisplay=true
+MimeType=image/bmp;image/gif;image/jpeg;image/png;image/tiff;image/x-portable-anymap;image/x-portable-bitmap;image/x-portable-graymap;image/x-portable-pixmap;image/x-xbitmap;image/x-xpixmap;image/svg+xml;

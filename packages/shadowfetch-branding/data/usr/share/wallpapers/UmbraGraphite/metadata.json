@@ -1,0 +1,12 @@
+{
+ "KPlugin": {
+  "Id": "UmbraGraphite",
+  "Name": "Umbra Graphite",
+  "License": "GPL-3.0",
+  "Authors": [
+   {
+    "Name": "Shadowfetch Project"
+   }
+  ]
+ }
+}

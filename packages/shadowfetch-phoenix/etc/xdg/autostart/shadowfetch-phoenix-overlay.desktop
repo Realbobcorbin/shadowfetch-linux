@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Phoenix Overlay Session Banner
+Comment=Warns when the system was booted from a read-only Phoenix Point and offers to make it permanent
+Exec=/usr/libexec/phoenix-overlay-banner
+Icon=shadowfetch
+Terminal=false
+NoDisplay=true
+X-KDE-StartupNotify=false
+# Exits immediately unless /run/phoenix-overlay exists (overlay boot).
+OnlyShowIn=KDE;

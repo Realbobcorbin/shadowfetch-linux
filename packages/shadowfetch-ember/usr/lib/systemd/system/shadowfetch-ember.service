@@ -1,0 +1,36 @@
+[Unit]
+Description=Shadowfetch Ember Mode (one switch; always returns to Balanced)
+Documentation=https://shadowfetch.com/linux/
+# Started and stopped on demand from the Control Center Ember switch (the
+# polkit rule lets the active console user do that without a password).
+# Never enabled, never autostarted: Ember is a switch, not a state.
+#
+# Auto-return layers live here:
+#   - ExecStartPre runs the idempotent restore BEFORE re-arming, so a
+#     previous crash can never stack mutations;
+#   - ExecStopPost runs the same restore on every exit path, including
+#     OOM-kill and watchdog abort;
+#   - the ppd performance hold dies with emberd's bus connection anyway;
+#   - every mutation is --runtime/tmpfs, so a power cut reverts by reboot.
+# "For N hours" arrives as a RuntimeMaxSec drop-in written to
+# /run/systemd/system/shadowfetch-ember.service.d/ by the pkexec
+# ember-duration helper and is enforced by pid 1, not by emberd.
+After=dbus.service power-profiles-daemon.service
+# Ember only makes sense on an installed, running desktop -- never arm on
+# live media where nothing was installed and nothing should be mutated.
+ConditionPathExists=!/run/live/medium
+ConditionPathExists=!/run/live/rootfs
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStartPre=/usr/libexec/ember-restore
+ExecStart=/usr/libexec/emberd
+ExecStopPost=/usr/libexec/ember-restore
+WatchdogSec=15
+Restart=no
+TimeoutStartSec=30
+TimeoutStopSec=30
+# The engine mutates cpufreq sysfs, systemd properties and /run only.
+ProtectHome=read-only
+PrivateTmp=yes

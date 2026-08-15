@@ -1,0 +1,12 @@
+{
+  "name": "shadowfetch-linux-worker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cloudflare Worker serving shadowfetch.com/linux/* — landing page, ISO downloads, APT repo proxy.",
+  "main": "src/index.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  }
+}

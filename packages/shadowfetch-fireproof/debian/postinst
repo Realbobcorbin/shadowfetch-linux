@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # State directory shared with Phoenix. fireproofd writes
+        # fireproof-state.json (rollback carousel) and fireproof-pending
+        # (first-boot-after-update flag) here; both are root-owned, the
+        # directory itself is world-readable so the page and CLI can show
+        # honest state without privileges.
+        mkdir -p /var/lib/shadowfetch
+        chmod 0755 /var/lib/shadowfetch
+
+        # Hard backstop for the update-ownership rule: PackageKit's
+        # offline-update path would apply updates at boot, outside
+        # Fireproof's analyze/verify/rollback protocol. The ISO masks
+        # this at build time; repeating it here keeps it off on a bare
+        # deb install or after an upgrade pulls the unit back in.
+        # PackageKit itself stays - Discover depends on it, and its apt
+        # backend still gets Phoenix Points via the dpkg hooks.
+        deb-systemd-helper mask packagekit-offline-update.service >/dev/null 2>&1 || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

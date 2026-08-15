@@ -1,0 +1,42 @@
+# Shadowfetch networking & WiFi toolkit — added v1.0.6
+# Broad WiFi chipset firmware already ships in core; this adds management,
+# diagnostics, VPN-over-WiFi, hotspot, and ease-of-use.
+
+# WiFi management / diagnostics
+iw
+wireless-tools
+rfkill
+wavemon
+ethtool
+
+# NetworkManager VPN plugins (one-click VPN over any connection)
+network-manager-openvpn-gnome
+network-manager-openconnect-gnome
+network-manager-l2tp-gnome
+network-manager-vpnc-gnome
+network-manager-strongswan
+
+# Wi-Fi hotspot / connection sharing backend (NM "Create Hotspot")
+dnsmasq-base
+
+# Network diagnostics
+iperf3
+mtr-tiny
+nmap
+tcpdump
+traceroute
+bind9-dnsutils
+whois
+
+# Ease of use — disk + package GUIs
+gparted
+synaptic
+
+# --- Broaden WiFi chipset firmware coverage (v1.3.0) ---
+# (iwlwifi / realtek / atheros / brcm80211 / misc-nonfree already ship in core)
+firmware-mediatek
+firmware-libertas
+firmware-ti-connectivity
+firmware-zd1211
+firmware-ath9k-htc
+wireless-regdb

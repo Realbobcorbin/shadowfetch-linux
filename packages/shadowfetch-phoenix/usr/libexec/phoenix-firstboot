@@ -1,0 +1,123 @@
+#!/bin/sh
+# phoenix-firstboot - arm Phoenix Recovery on the first boot of an installed
+# system. Part of Shadowfetch Linux 2.1.2 "Fire Edition".
+#
+# On a Btrfs root this creates the snapper config that 80snapper (shipped by
+# Debian snapper) needs to wrap every dpkg run in pre/post Phoenix Points,
+# tunes it (no timeline snapshots - Points come from apt transactions and the
+# user), enables the cleanup timer and grub-btrfsd, and takes Point #1
+# ("Fresh install"). On any other filesystem it stamps done and exits: the
+# Phoenix panel then shows only the repair toolkit under the banner
+# "Phoenix Points require the Btrfs filesystem (chosen at install)".
+#
+# Idempotent, safe to run on every boot; the unit also gates on the stamp.
+
+set -u
+
+case "${1:-}" in
+  -h|--help)
+    cat <<'SFHELP'
+phoenix-firstboot - one-shot Phoenix Recovery setup (run by systemd at first boot).
+
+USAGE
+  phoenix-firstboot        arm snapper + grub-btrfsd on a Btrfs root
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+    exit 0 ;;
+  --version)
+    echo "phoenix-firstboot (Shadowfetch Linux) $(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"; exit 0 ;;
+esac
+
+STAMP=/var/lib/shadowfetch/phoenix-firstboot.done
+[ -f "$STAMP" ] && exit 0
+mkdir -p /var/lib/shadowfetch
+
+# Never run on live media (same guard as shadowfetch-firstboot.service) and
+# never while riding a read-only snapshot in the overlay session.
+if [ -e /run/live/medium ] || [ -e /run/live/rootfs ] || [ -f /run/phoenix-overlay ]; then
+    exit 0
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "phoenix-firstboot: must run as root" >&2
+    exit 1
+fi
+
+# Not a Btrfs root: Phoenix Points are unavailable, honestly. Stamp and leave.
+if [ "$(stat -f -c %T / 2>/dev/null)" != "btrfs" ] || ! command -v snapper >/dev/null 2>&1; then
+    touch "$STAMP"
+    exit 0
+fi
+
+# --- 1. Create the snapper root config -------------------------------------
+#
+# snapper create-config insists on creating /.snapshots itself as a NESTED
+# subvolume, but our Calamares layout already has a dedicated top-level
+# @snapshots subvolume with an fstab entry for /.snapshots (so Point history
+# survives a root-subvolume swap by phoenix-restore). Sequence: unmount the
+# fstab mount if present, let create-config run, delete the nested subvolume
+# it made, then remount @snapshots in its place.
+if [ ! -f /etc/snapper/configs/root ]; then
+    if mountpoint -q /.snapshots 2>/dev/null; then
+        umount /.snapshots 2>/dev/null || true
+    fi
+    # A leftover plain directory blocks create-config; a leftover nested
+    # subvolume from an earlier partial run must go the btrfs way.
+    if [ -d /.snapshots ]; then
+        btrfs subvolume delete /.snapshots >/dev/null 2>&1 || rmdir /.snapshots 2>/dev/null || true
+    fi
+    snapper --no-dbus -c root create-config / || {
+        echo "phoenix-firstboot: snapper create-config failed" >&2
+        exit 1
+    }
+    # Replace the nested .snapshots subvolume with the real @snapshots mount.
+    btrfs subvolume delete /.snapshots >/dev/null 2>&1 || true
+    mkdir -p /.snapshots
+    chmod 750 /.snapshots
+    mount /.snapshots 2>/dev/null || true
+fi
+
+# --- 2. Tune the config (applies on re-runs too) ---------------------------
+#
+# TIMELINE_CREATE=no: Points come from apt transactions (80snapper) and the
+# user, not from a clock. NUMBER_LIMIT keeps at most 8 numbered Points
+# (4 important), EMPTY_PRE_POST_CLEANUP drops no-op pre/post pairs, and
+# FREE_LIMIT=0.2 makes snapper's own cleanup start acting below 20% free
+# space (phoenix-space-check adds the synchronous pre-transaction pass).
+# QGROUP stays unset: qgroup accounting is roadmap, not 2.1.2.
+snapper --no-dbus -c root set-config \
+    TIMELINE_CREATE=no \
+    NUMBER_CLEANUP=yes \
+    NUMBER_LIMIT=8 \
+    NUMBER_LIMIT_IMPORTANT=4 \
+    EMPTY_PRE_POST_CLEANUP=yes \
+    FREE_LIMIT=0.2 \
+    QGROUP= \
+    2>/dev/null || true
+
+# Let the first user's group read the Point list over snapperd's D-Bus so the
+# Phoenix panel needs no polkit prompt just to LIST Points (restore stays
+# behind pkexec).
+primary=$(getent passwd 1000 | cut -d: -f1)
+if [ -n "$primary" ]; then
+    pgroup=$(id -gn "$primary" 2>/dev/null || true)
+    [ -n "$pgroup" ] && snapper --no-dbus -c root set-config ALLOW_GROUPS="$pgroup" SYNC_ACL=yes 2>/dev/null || true
+fi
+
+# --- 3. Services: cleanup timer + boot-menu regeneration -------------------
+systemctl enable --now snapper-cleanup.timer 2>/dev/null || true
+# grub-btrfsd (in-house grub-btrfs 4.14-2) watches /.snapshots and regenerates
+# the "Last Known Good Flame" GRUB submenu on every snapshot event.
+systemctl enable --now grub-btrfsd.service 2>/dev/null || true
+
+# --- 4. Point #1 -----------------------------------------------------------
+snapper --no-dbus -c root create --description "Fresh install" 2>/dev/null || true
+
+# Seed the boot submenu right away rather than waiting for the next event.
+if command -v update-grub >/dev/null 2>&1; then
+    update-grub >/dev/null 2>&1 || true
+fi
+
+touch "$STAMP"
+exit 0

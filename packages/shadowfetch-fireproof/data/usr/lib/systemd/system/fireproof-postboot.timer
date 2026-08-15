@@ -1,0 +1,16 @@
+[Unit]
+Description=Fallback trigger for the Fireproof first-boot-after-update check
+Documentation=https://shadowfetch.com/linux/
+# graphical.target may never activate on exactly the boots this check
+# exists for. Fire the service 120 s into every boot as a backstop; the
+# ConditionPathExists on the service makes it a no-op when no update is
+# pending.
+ConditionPathExists=/var/lib/shadowfetch/fireproof-pending
+
+[Timer]
+OnBootSec=120
+AccuracySec=15s
+Unit=fireproof-postboot.service
+
+[Install]
+WantedBy=timers.target

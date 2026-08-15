@@ -1,0 +1,52 @@
+shadowfetch-ember (2.1.4-1) umbra; urgency=medium
+
+  * Route AI workload actions to the renamed Local AI control surface.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sat, 08 Aug 2026 11:32:00 -0400
+
+shadowfetch-ember (2.1.3-1) unstable; urgency=high
+
+  * Version bump to match the 2.1.3 release. No functional changes in this
+    package. 2.1.3 is a security/stability release fixing a critical Calamares
+    installer bug (sf-remove-live-user, see shadowfetch-branding 2.1.3-1) and a
+    first-boot-on-live-session bug (see shadowfetch-defaults 2.1.3-1).
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Sun, 02 Aug 2026 10:22:06 -0400
+shadowfetch-ember (2.1.2-1) unstable; urgency=medium
+
+  * Initial release: the Ember Mode engine for Shadowfetch Linux 2.1.2
+    "Fire Edition".
+  * One switch, one promise: emberd holds the 'performance' power profile
+    via power-profiles-daemon (HoldProfile), falls back to the cpupower
+    governor where no ppd performance profile exists, pauses a curated
+    read-only list of background services behind gate conditions
+    (PackageKit only when the package system is idle, ModemManager never
+    when a WWAN bearer is the default route), and applies a runtime
+    CPUWeight=40 drop-in to system.slice. The IOWeight claim from the
+    design was dropped, not shipped as a placebo: io.weight is a no-op on
+    default NVMe schedulers.
+  * Always returns to Balanced, four independent ways: the ppd hold dies
+    with the daemon's bus connection; /usr/libexec/ember-restore
+    (idempotent, POSIX sh) undoes every mutation recorded in
+    /run/shadowfetch/ember.state as ExecStartPre AND ExecStopPost; a
+    ProfileReleased watch treats a profile change in the Plasma applet as
+    a graceful extinguish, never a re-hold; and every mutation is
+    --runtime/tmpfs, so a power cut reverts by reboot. WatchdogSec=15
+    catches hangs in the engine itself.
+  * emberd has NO sampler (judge must-fix folded): firewatchd is the
+    single sensor source. The idle watchdog consumes the WORK-ONLY
+    effective-load terms from org.shadowfetch.Firewatch1 -- thermal
+    proximity is excluded from the auto-return test, so a hot thin laptop
+    cannot pin itself into Ember forever (that term stays in the flame
+    display, which Firewatch owns).
+  * Read-only status on the system bus: com.shadowfetch.Ember1 with
+    {armed, hold_active, paused_units, state_file_hash}.
+  * The active local console user flips the switch without a password
+    (polkit rules file, scoped to exactly this unit and the
+    start/stop/restart verbs).
+  * Ships the pkexec ember-duration helper -- the single root-write path
+    for the RuntimeMaxSec time limit and the /run/shadowfetch/ember-profile
+    app-profile marker (IA fold: session QML never writes root paths;
+    ember-restore clears the marker in the same pass).
+
+ -- Shadowfetch Project <signing@shadowfetch.com>  Thu, 30 Jul 2026 11:30:00 -0400

@@ -1,0 +1,35 @@
+#!/bin/bash
+# Shadowfetch hook: 0017-suppress-plasma-welcome
+#
+# v1.0.2 attempted to suppress KDE's stock Welcome Center by dropping a
+# Hidden=true override into /etc/skel/.config/autostart/ — that didn't work
+# because KDE Plasma 6 launches plasma-welcome via kded/the desktop's own
+# autostart manager, not by reading the user .config/autostart entry on first
+# run.
+#
+# The clean fix: don't ship the binary at all. We have our own welcome wizard
+# (shadowfetch-welcome) so plasma-welcome has no role here.
+
+set -e
+
+echo "[shadowfetch] Purging KDE Plasma Welcome Center..."
+
+if dpkg -s plasma-welcome >/dev/null 2>&1; then
+    apt-get -y purge plasma-welcome || true
+    apt-get -y autoremove --purge || true
+    echo "[shadowfetch]   plasma-welcome purged."
+else
+    echo "[shadowfetch]   plasma-welcome not present (already excluded)."
+fi
+
+# Belt-and-braces: nuke any stragglers under /usr/share that could relaunch it.
+rm -f /usr/share/applications/org.kde.plasma.welcome.desktop \
+      /etc/xdg/autostart/org.kde.plasma.welcome.desktop \
+      /usr/lib/systemd/user/plasma-welcome.service \
+      2>/dev/null || true
+
+# Keep the /etc/skel override in place — if a future update reinstalls
+# plasma-welcome through Recommends, the Hidden=true autostart entry
+# is still our second line of defense.
+
+echo "[shadowfetch] Welcome Center suppression complete."

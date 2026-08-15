@@ -1,0 +1,134 @@
+# Shadowfetch core system packages
+# These are required regardless of the variant being built.
+
+# Kernel and bootloader
+linux-image-amd64
+linux-headers-amd64
+firmware-linux
+firmware-linux-nonfree
+firmware-misc-nonfree
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-brcm80211
+
+# --- audio firmware. Added 2026-07-26 ------------------------------------
+# firmware-sof-signed is the gap that mattered. Sound Open Firmware drives
+# the audio DSP on essentially every Intel laptop from Tiger Lake onward
+# (2019+). Without it those machines have NO SOUND AT ALL - not quiet, not
+# wrong output, nothing - and the cause is invisible: the driver loads and
+# then fails to fetch the DSP blob.
+#
+# alsa-ucm-conf carries the Use Case Manager profiles that route those
+# codecs correctly; SOF without UCM gets you a card that exists and still
+# plays nothing through the speakers.
+#
+# firmware-cirrus covers the Cirrus Logic smart amps in newer ThinkPads and
+# XPS machines.
+#
+# Roughly 54 MB uncompressed, about 20-30 MB after squashfs compression
+# (measured ratio 11.34 GiB -> 3.96 GiB). Headroom before the FAT32 4 GiB
+# per-file limit was 41 MiB, so this fits - but only just. Anything further
+# needs something removed first; check `ls -la filesystem.squashfs` after
+# a build before adding more.
+firmware-sof-signed
+alsa-ucm-conf
+firmware-cirrus
+intel-microcode
+amd64-microcode
+grub-efi-amd64
+grub-pc-bin
+shim-signed
+efibootmgr
+
+# Live system essentials
+live-boot
+live-config
+live-config-systemd
+live-tools
+
+# syslinux-utils provides isohybrid (lb_binary_iso runs it inside the chroot;
+# Debian testing split isohybrid out of syslinux into syslinux-utils)
+syslinux-utils
+
+# Installer (Calamares — themed separately)
+calamares
+calamares-settings-debian
+qml-module-qtquick2
+qml-module-qtquick-controls
+qml-module-qtquick-controls2
+
+# Base utilities
+sudo
+network-manager
+network-manager-gnome
+systemd-timesyncd
+wpasupplicant
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+pipewire-audio
+bluetooth
+bluez
+flatpak
+plasma-discover-backend-flatpak
+
+# Performance and resilience
+zram-tools
+earlyoom
+# preload — removed from Debian testing; will revisit in v1.0.1
+
+# Filesystems
+btrfs-progs
+exfatprogs
+ntfs-3g
+dosfstools
+
+# Shell and terminal basics
+zsh
+fish
+bash-completion
+htop
+btop
+# neofetch — removed (unmaintained); fastfetch replaces it
+fastfetch
+curl
+wget
+git
+vim
+nano
+build-essential
+
+# Codecs and multimedia plumbing
+ffmpeg
+gstreamer1.0-plugins-base
+gstreamer1.0-plugins-good
+gstreamer1.0-plugins-bad
+gstreamer1.0-plugins-ugly
+gstreamer1.0-libav
+# gstreamer1.0-vaapi — deprecated/removed
+# libdvd-pkg is intentionally omitted: its maintainer scripts download and
+# locally build an unpinned libdvdcss release while the ISO is assembled.
+
+# Fonts (curated default set)
+fonts-inter
+# fonts-jetbrains-mono — not in Debian testing under this name; revisit in v1.0.1
+fonts-firacode
+# 2.1.2: fonts-noto (the metapackage) drags fonts-noto-extra (326 MB) and
+# fonts-noto-cjk-extra (210 MB) -- 536 MB of extended-script coverage nobody
+# selected. fonts-noto-core carries Latin/Greek/Cyrillic and the common scripts;
+# fonts-noto-cjk is declared in qol2 so CJK is unaffected. Full coverage is one
+# click away in Welcome (catalog: fonts-extended).
+fonts-noto-core
+fonts-noto-color-emoji
+# fonts-noto-cjk — ~400MB; dropped for v1 (users with CJK needs: apt install fonts-noto-cjk)
+# fonts-recursive — not in Debian testing
+fonts-roboto
+fonts-liberation
+fonts-cantarell
+
+# 2.1.2: without this, an encrypted install builds an initrd with NO LUKS
+# unlock (cryptsetup alone ships the tools, not the initramfs hook) -- the
+# system drops to busybox at boot. Proven and fixed in the 2.1.2 QEMU harness.
+cryptsetup-initramfs

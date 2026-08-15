@@ -1,0 +1,13 @@
+{
+  "id": "media-easytag",
+  "name": "EasyTAG",
+  "kind": "apt",
+  "packages": ["easytag"],
+  "url": "",
+  "sha256": "",
+  "size_bytes": 800000,
+  "license": "GPL-2.0-or-later",
+  "min_ram_gb": 0,
+  "requires": ["none"],
+  "blurb": "Simple, fast audio tag editor with a tree-based file browser - a classic GTK alternative to Kid3. About 0.8 MB to download, 4.3 MB installed; measured exactly at ISO build time."
+}

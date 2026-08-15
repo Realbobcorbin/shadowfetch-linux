@@ -1,0 +1,21 @@
+{
+  "id": "preset-photography",
+  "name": "Photography preset",
+  "kind": "preset",
+  "packages": [
+    "darktable",
+    "gimp",
+    "rawtherapee",
+    "digikam",
+    "hugin",
+    "luminance-hdr"
+  ],
+  "url": null,
+  "sha256": null,
+  "size_bytes": null,
+  "license": "Free software (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "presets",
+  "blurb": "The complete photography workflow: darktable and RawTherapee for RAW development, GIMP for editing, digiKam for the library, Hugin for panoramas and Luminance HDR for exposure fusion."
+}

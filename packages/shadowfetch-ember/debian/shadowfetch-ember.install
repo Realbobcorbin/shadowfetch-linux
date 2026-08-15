@@ -1,0 +1,8 @@
+usr/libexec/emberd                                    usr/libexec/
+usr/lib/systemd/system/shadowfetch-ember.service      usr/lib/systemd/system/
+usr/libexec/ember-restore                             usr/libexec/
+usr/libexec/ember-duration                            usr/libexec/
+usr/share/shadowfetch/ember/pause-list.conf           usr/share/shadowfetch/ember/
+usr/share/polkit-1/rules.d/50-shadowfetch-ember.rules usr/share/polkit-1/rules.d/
+usr/share/polkit-1/actions/com.shadowfetch.ember.policy usr/share/polkit-1/actions/
+usr/share/dbus-1/system.d/com.shadowfetch.Ember1.conf usr/share/dbus-1/system.d/

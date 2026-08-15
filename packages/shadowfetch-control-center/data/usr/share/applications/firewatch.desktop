@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Firewatch
+Comment=Live system visibility — sensors, the heat map, local model telemetry
+Exec=shadowfetch-control --page watch
+Icon=shadowfetch
+Terminal=false
+Categories=System;Monitor;
+Keywords=monitor;sensors;temperature;fan;heat;models;tokens;
+StartupNotify=true

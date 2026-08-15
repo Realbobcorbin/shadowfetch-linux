@@ -1,0 +1,35 @@
+#!/bin/bash
+set -euo pipefail
+
+# ---- --help / --version, BEFORE any side effect -----------------------------
+# This block is deliberately the first thing that runs. Until 2026-07-26 this
+# tool had no argument handling at all, so `--help` fell through to the body and
+# ran the tool's normal actions. Someone asking a command what it does
+# should never thereby cause it to do the thing.
+case "${1:-}" in
+  -h|--help)
+    cat <<'SFHELP'
+shadowfetch-recovery - Recovery helper: rollback and repair entry points.
+
+USAGE
+  shadowfetch-recovery     show recovery options
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+    exit 0 ;;
+  --version)
+    echo "shadowfetch-recovery (Shadowfetch Linux) $(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"; exit 0 ;;
+esac
+
+printf '\nShadowfetch Graphics & Recovery\n================================\n'
+printf '  1) Open Btrfs Assistant\n  2) List system snapshots\n  3) Run graphics driver helper\n  4) Show failed services\n  5) Open recent critical logs\n  q) Quit\n\n'
+read -r -p "Choose: " choice
+case "$choice" in
+    1) command -v btrfs-assistant >/dev/null 2>&1 && btrfs-assistant >/dev/null 2>&1 & ;;
+    2) sudo snapper -c root list ;;
+    3) exec shadowfetch-gpu ;;
+    4) systemctl --failed --no-pager ;;
+    5) journalctl -p err -b --no-pager | tail -n 200 ;;
+    q|Q|"") exit 0 ;;
+    *) exit 1 ;;
+esac

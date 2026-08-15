@@ -1,0 +1,4 @@
+Fire Edition wallpaper. Source render: source-1672x941.png (founder, 2026-07-30).
+Shipped 3840x2160 + 3440x1440 are 2.3x upscales (sips) of that source.
+If a native 4K export ever exists, regenerate the pack images from it and change nothing else:
+the default (backgrounds/shadowfetch/umbra-4k.jpg), lock screen, and SDDM all read these files.

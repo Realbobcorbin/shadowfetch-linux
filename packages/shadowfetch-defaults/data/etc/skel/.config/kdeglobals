@@ -1,0 +1,30 @@
+[General]
+ColorScheme=ShadowfetchDark
+Name=Shadowfetch Umbra
+AccentColor=216,162,74
+accentColorFromWallpaper=false
+font=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+fixed=Fira Code,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+XftAntialias=true
+XftHintStyle=hintslight
+XftSubPixel=rgb
+
+[KDE]
+LookAndFeelPackage=org.shadowfetch.dark
+SingleClick=false
+AnimationDurationFactor=0.85
+contrast=4
+widgetStyle=Breeze
+
+[Icons]
+Theme=Papirus-Dark
+
+[WM]
+activeFont=Inter,10,-1,5,500,0,0,0,0,0,0,0,0,0,0,1
+activeBackground=14,17,22
+activeForeground=214,219,225
+inactiveBackground=24,28,34
+inactiveForeground=150,158,166

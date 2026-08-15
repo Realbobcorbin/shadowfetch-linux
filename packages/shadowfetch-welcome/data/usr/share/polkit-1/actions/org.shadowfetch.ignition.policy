@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>Shadowfetch Project</vendor>
+  <vendor_url>https://shadowfetch.com/linux/</vendor_url>
+
+  <!-- Installing a bundle mutates the system: administrator authentication,
+       kept for the session so a retry after a failure does not re-prompt. -->
+  <action id="org.shadowfetch.bundle-install">
+    <description>Install a Shadowfetch software bundle</description>
+    <message>Authentication is required to install a software bundle</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/shadowfetch-bundle-install</annotate>
+  </action>
+
+  <!-- Writing the 200-byte Ignition choice/stamp files is not a system
+       mutation: passwordless for the active local user, so the zero-package
+       Core pick and the offline save-choice path never prompt. -->
+  <action id="org.shadowfetch.ignition-state">
+    <description>Record the Ignition setup choice</description>
+    <message>Authentication is required to record the setup choice</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/shadowfetch-ignition-state</annotate>
+  </action>
+</policyconfig>

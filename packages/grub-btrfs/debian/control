@@ -1,0 +1,19 @@
+Source: grub-btrfs
+Section: admin
+Priority: optional
+Maintainer: Shadowfetch Project <signing@shadowfetch.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/Antynea/grub-btrfs
+
+Package: grub-btrfs
+Architecture: all
+Depends: ${misc:Depends}, btrfs-progs, inotify-tools
+Recommends: grub-common | grub2-common, snapper
+Description: Include Btrfs snapshots as GRUB boot entries (vendored v4.14)
+ grub-btrfs adds a GRUB submenu listing your Btrfs snapshots so a broken
+ upgrade is one reboot away from a known-good system. The grub-btrfsd daemon
+ watches the snapshot directory and regenerates the menu automatically.
+ .
+ Vendored from upstream Antynea/grub-btrfs v4.14 (GPL-3+) by Shadowfetch Linux
+ because the Debian package is not currently available in testing.

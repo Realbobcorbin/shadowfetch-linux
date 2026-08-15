@@ -1,0 +1,9 @@
+[Unit]
+Description=Update system Flatpaks
+After=network-online.target
+Wants=network-online.target
+ConditionFileIsExecutable=/usr/bin/flatpak
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flatpak update --assumeyes --noninteractive --system

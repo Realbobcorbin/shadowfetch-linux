@@ -1,0 +1,21 @@
+[Unit]
+Description=Shadowfetch first-boot setup (Flathub remote, firewall, NVIDIA power)
+# 2.1.2: do not run on a live session.
+#
+# The only guard used to be firstboot.done, so booting the USB to look at the
+# distro ran the whole script on the visitor's machine: it set the hardware clock
+# to local time (firstboot.sh:24) and downloaded Flatpak themes before the
+# firewall came up. Neither is acceptable on a machine nobody installed onto.
+# Same guard hook 0020 already uses for the GPU unit.
+ConditionPathExists=!/var/lib/shadowfetch/firstboot.done
+ConditionPathExists=!/run/live/medium
+ConditionPathExists=!/run/live/rootfs
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/shadowfetch/firstboot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+# Virtual-machine guest integration.
+#
+# Three of the four public reviewers of Shadowfetch ran it in a VM, and one had
+# to open System Settings and set 1280x800 by hand because the guest had no way
+# to negotiate a resolution with the host. The 2.0.0 manifest listed 3332
+# packages and not one matched spice, qemu, virtualbox or open-vm, so there was
+# no dynamic resolution, no clipboard sharing and no guest-agent shutdown.
+#
+# EVERY package here was verified present in Debian testing by grepping the
+# chroot apt lists, not the build host. An earlier revision of this file listed
+# virtualbox-guest-x11, xserver-xorg-video-qxl and xserver-xorg-video-vmware,
+# which were checked against the build box (Ubuntu) instead of the target
+# (Debian testing) and do not exist there. That broke the 2.0.1 build at
+# chroot_package-lists.install with "Unable to locate package".
+#
+# NOT included, and why:
+#   virtualbox-guest-x11 / virtualbox-guest-utils - not packaged in Debian
+#     testing. VirtualBox users still need the Oracle Guest Additions ISO, so
+#     VirtualBox auto-resize is a documented limitation rather than something
+#     this list can fix. /linux/hardware should say so plainly.
+#   xserver-xorg-video-qxl / xserver-xorg-video-vmware - removed from Debian;
+#     the kernel modesetting driver covers both.
+#
+# All of these are inert on bare metal: their services do not start without the
+# matching hypervisor present.
+spice-vdagent
+qemu-guest-agent
+open-vm-tools

@@ -1,0 +1,109 @@
+#!/bin/sh
+# Shadowfetch replacement for Debian's calamares-sources-final helper.
+#
+# THE BUG THIS FIXES, which affected every installed system up to and including
+# 2.0.0. The stock helper shipped by calamares-settings-debian contains:
+#
+#     RELEASE="trixie"
+#     cat << EOF > $CHROOT/etc/apt/sources.list
+#     deb http://deb.debian.org/debian $RELEASE main non-free-firmware
+#     ... $RELEASE-updates, $RELEASE-security, $RELEASE-backports ...
+#
+# It hardcodes trixie (Debian 13 stable) and overwrites the target's
+# sources.list unconditionally, at the very end of the install. Shadowfetch is a
+# Debian TESTING derivative -- the live image ships:
+#
+#     deb http://deb.debian.org/debian/ testing main contrib non-free non-free-firmware
+#     deb http://deb.debian.org/debian/ testing-updates main contrib non-free non-free-firmware
+#
+# So every install ended up a forky/sid userland pointed at Debian 13 stable
+# repositories. Measured consequence on a clean 2.0.0 install: `apt install
+# pluma` does not merely propose removals, it fails outright with unsatisfiable
+# dependencies. A public reviewer hit the milder v1.0 form of this -- apt
+# offering to remove GIMP and the rest of the creative stack to install a text
+# editor -- and concluded on camera that the distro could not be recommended to
+# new users, naming package management as the reason.
+#
+# Second, quieter loss: the stock template lists only `main non-free-firmware`,
+# dropping contrib and non-free. The live image carries packages from both --
+# including the NVIDIA stack -- so those were left installed with no upgrade
+# path at all. For a distro that advertises working NVIDIA on Debian, that is
+# the worst possible component to silently orphan.
+#
+# WHY THIS DERIVES INSTEAD OF HARDCODING. Replacing "trixie" with "forky" would
+# be the same bug with a fresher value: forky becomes stable eventually and
+# testing moves on. The suite and components are read from the live image's own
+# sources.list, which is the thing the image was actually built against, so this
+# file cannot drift from the product. If that cannot be read, it fails loudly
+# rather than writing a guess -- an install that stops is recoverable, an install
+# with a silently wrong archive is what shipped for nine weeks.
+#
+# Not touched deliberately: /etc/apt/sources.list.d/shadowfetch.list is a
+# separate file and already survives; and no *-security suite is added, because
+# Debian testing's security handling is not the stable model and inventing
+# archive policy here is not this script's job. Flagged for a human decision.
+set -u
+
+CHROOT=$(mount | grep proc | grep calamares | awk '{print $3}' | sed -e "s#/proc##g")
+LIVE_LIST=/etc/apt/sources.list
+
+if [ -z "${CHROOT:-}" ] || [ ! -d "$CHROOT" ]; then
+    echo "[shadowfetch] sources-final: could not locate the Calamares target root" >&2
+    exit 1
+fi
+
+# Derive suite + components from the first real deb line of the live image.
+# Deliberately not a codename lookup: whatever the image was built against is
+# what the installed system must follow.
+live_line=$(grep -E '^[[:space:]]*deb[[:space:]]+https?://' "$LIVE_LIST" 2>/dev/null \
+            | grep -vE '(-updates|-security|-backports)[[:space:]]' | head -n 1)
+
+if [ -z "$live_line" ]; then
+    echo "[shadowfetch] sources-final: no usable deb line in $LIVE_LIST -- refusing to" >&2
+    echo "[shadowfetch]   guess a suite. The installed system would get the wrong Debian" >&2
+    echo "[shadowfetch]   archive, which breaks apt. Please report this at" >&2
+    echo "[shadowfetch]   https://github.com/Realbobcorbin/shadowfetch-linux/issues" >&2
+    exit 1
+fi
+
+MIRROR=$(echo "$live_line" | awk '{print $2}')
+SUITE=$(echo "$live_line" | awk '{print $3}')
+COMPONENTS=$(echo "$live_line" | cut -d' ' -f4- | tr -s ' ')
+
+if [ -z "$MIRROR" ] || [ -z "$SUITE" ] || [ -z "$COMPONENTS" ]; then
+    echo "[shadowfetch] sources-final: could not parse mirror/suite/components from:" >&2
+    echo "[shadowfetch]   $live_line" >&2
+    exit 1
+fi
+
+echo "[shadowfetch] sources-final: suite '$SUITE', components '$COMPONENTS' (from the live image)"
+
+cat > "$CHROOT/etc/apt/sources.list" <<EOF
+# Shadowfetch Linux -- Debian $SUITE.
+# Written at install time from the suite this image was built against, so it
+# cannot disagree with the installed userland. See https://wiki.debian.org/SourcesList
+deb $MIRROR $SUITE $COMPONENTS
+deb-src $MIRROR $SUITE $COMPONENTS
+deb $MIRROR $SUITE-updates $COMPONENTS
+deb-src $MIRROR $SUITE-updates $COMPONENTS
+EOF
+
+# Verify. The stock helper exited 0 unconditionally; this one checks that what it
+# just wrote actually names the suite the system runs, because a wrong archive is
+# invisible until the user's first apt install and then catastrophic.
+if ! grep -qE "^deb[[:space:]]+\S+[[:space:]]+${SUITE}[[:space:]]" "$CHROOT/etc/apt/sources.list"; then
+    echo "[shadowfetch] sources-final: FATAL -- wrote sources.list but it does not name" >&2
+    echo "[shadowfetch]   suite '$SUITE'. Refusing to finish rather than hand over a" >&2
+    echo "[shadowfetch]   system whose package manager is pointed at the wrong archive." >&2
+    exit 1
+fi
+
+for c in contrib non-free; do
+    case " $COMPONENTS " in
+        *" $c "*) ;;
+        *) echo "[shadowfetch] sources-final: note -- live image does not enable '$c'" ;;
+    esac
+done
+
+echo "[shadowfetch] sources-final: wrote $CHROOT/etc/apt/sources.list"
+exit 0

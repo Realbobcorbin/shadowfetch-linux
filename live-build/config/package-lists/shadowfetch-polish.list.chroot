@@ -1,0 +1,37 @@
+# Shadowfetch 1.0.8 "Polish & Protect"
+# --- Media codecs (play MP3/MP4/HEVC out of the box) ---
+gstreamer1.0-plugins-bad
+gstreamer1.0-plugins-ugly
+gstreamer1.0-libav
+ffmpeg
+libavcodec-extra
+# --- Flatpak + Flathub in Discover ---
+flatpak
+plasma-discover-backend-flatpak
+# --- Firewall ---
+ufw
+gufw
+# --- Compressed swap ---
+zram-tools
+# --- Bluetooth: GUI + LDAC codec ---
+blueman
+libldacbt-enc2
+libldacbt-abr2
+# --- GTK dark consistency ---
+breeze-gtk-theme
+# --- Fonts + icons ---
+fonts-inter
+fonts-firacode
+papirus-icon-theme
+# --- Power-user tools ---
+nala
+distrobox
+podman
+# --- Diagnostics ---
+powertop
+
+# --- v1.3.0 crisp polish: emoji ("no tofu") + on-brand gold cursor ---
+fonts-noto-color-emoji
+bibata-cursor-theme
+fonts-crosextra-carlito
+fonts-crosextra-caladea

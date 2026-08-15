@@ -1,0 +1,103 @@
+#!/bin/sh
+# Shadowfetch: remove the live-session account from the installed system.
+# Runs in the target chroot via the Calamares "shellprocess" module.
+#
+# WHY THIS IS A SCRIPT AND NOT AN INLINE ONE-LINER.
+# It used to be a single shellprocess.conf command:
+#
+#   userdel --remove --force shadow 2>/dev/null; rm -rf /home/shadow 2>/dev/null; \
+#   rm -f /etc/sddm.conf.d/10-shadowfetch-autologin.conf 2>/dev/null; \
+#   rm -f /etc/sudoers.d/shadowfetch-live-shadow 2>/dev/null; true
+#
+# Every command suppressed its own errors and the whole thing ended in `true`, so
+# the step could not report failure. The live account is `shadow` with password
+# `shadow` and NOPASSWD:ALL sudo (see 0005-create-live-user.hook.chroot) -- an
+# ordinary live-medium convention, and a root-equivalent credential if it survives
+# an install. A silent failure therefore shipped a known-password sudo account and
+# reported the install as successful.
+#
+# MEASURED 2026-07-24 on a real 2.0.0 erase-disk install: the removal DOES work on
+# the default path -- all five artefacts were absent afterwards. But userdel can
+# return 1 while leaving the account AND its password hash intact when it sees a
+# process owned by shadow. In Calamares, this script runs in a chroot, not a PID
+# namespace, so process-based cleanup can see and affect the live desktop's UID
+# 1000 session. Killing that UID is release-blocking.
+#
+# This closes it at the filesystem boundary instead: edit the target account
+# databases directly, remove target-only files, then VERIFY and fail loudly if
+# anything survived. Aborting the install is a deliberate trade -- a visible
+# failure the user can report beats a silent credential they cannot see.
+set -u
+
+LIVE_USER=shadow
+SUDOERS=/etc/sudoers.d/shadowfetch-live-shadow
+AUTOLOGIN=/etc/sddm.conf.d/10-shadowfetch-autologin.conf
+
+echo "[shadowfetch] Removing live-session user '$LIVE_USER' from the installed system..."
+
+remove_user_lines() {
+    file=$1
+    [ -f "$file" ] || return 0
+    tmp="${file}.shadowfetch-live-user.$$"
+    awk -F: -v OFS=: -v user="$LIVE_USER" '$1 != user { print }' "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
+remove_user_from_groups() {
+    file=$1
+    [ -f "$file" ] || return 0
+    tmp="${file}.shadowfetch-live-user.$$"
+    awk -F: -v OFS=: -v user="$LIVE_USER" '
+        $1 == user { next }
+        {
+            n = split($4, members, ",")
+            kept = ""
+            for (i = 1; i <= n; i++) {
+                if (members[i] != "" && members[i] != user) {
+                    kept = kept (kept == "" ? "" : ",") members[i]
+                }
+            }
+            $4 = kept
+            print
+        }
+    ' "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
+# 1. Clear target filesystem obstacles only. Do not signal processes: this chroot
+#    shares the live installer PID namespace, and UID 1000 is the live desktop.
+if [ -d "/home/$LIVE_USER" ]; then
+    chattr -R -i "/home/$LIVE_USER" 2>/dev/null || true
+fi
+sync
+
+# 2. Remove account database entries without userdel's process namespace check.
+remove_user_lines /etc/passwd
+remove_user_lines /etc/shadow
+remove_user_from_groups /etc/group
+remove_user_from_groups /etc/gshadow
+
+rm -rf -- "/home/${LIVE_USER:?}"
+rm -f "$SUDOERS" "$AUTOLOGIN"
+
+# 3. VERIFY. This is the entire point: the old one-liner could not tell the
+#    difference between "removed" and "failed to remove". Check every artefact,
+#    including the /etc/shadow hash.
+failed=""
+if getent passwd "$LIVE_USER" >/dev/null 2>&1;   then failed="$failed passwd-entry"; fi
+if grep -q "^${LIVE_USER}:" /etc/shadow 2>/dev/null; then failed="$failed shadow-hash"; fi
+if [ -e "/home/$LIVE_USER" ];                    then failed="$failed home-dir"; fi
+if [ -e "$SUDOERS" ];                       then failed="$failed nopasswd-sudoers"; fi
+if [ -e "$AUTOLOGIN" ];                     then failed="$failed sddm-autologin"; fi
+
+if [ -n "$failed" ]; then
+    echo "[shadowfetch] FATAL: the live '$LIVE_USER' account was not fully removed." >&2
+    echo "[shadowfetch]        surviving:$failed" >&2
+    echo "[shadowfetch]        Refusing to finish. This account has a published" >&2
+    echo "[shadowfetch]        password and passwordless sudo, so completing the" >&2
+    echo "[shadowfetch]        install would hand over a machine with a known" >&2
+    echo "[shadowfetch]        credential. Please report this, with this message, at" >&2
+    echo "[shadowfetch]        https://github.com/Realbobcorbin/shadowfetch-linux/issues" >&2
+    exit 1
+fi
+
+echo "[shadowfetch] Live user '$LIVE_USER' fully removed (account, hash, home, sudoers, autologin)."
+exit 0

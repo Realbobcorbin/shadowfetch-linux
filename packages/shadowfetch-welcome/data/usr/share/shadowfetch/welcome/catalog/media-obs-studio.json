@@ -1,0 +1,14 @@
+{
+  "id": "media-obs-studio",
+  "name": "OBS Studio",
+  "kind": "apt",
+  "packages": ["obs-studio"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": null,
+  "license": "GPL-2.0+ (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "media",
+  "blurb": "Live streaming and screen recording with scenes, sources and hardware encoding."
+}

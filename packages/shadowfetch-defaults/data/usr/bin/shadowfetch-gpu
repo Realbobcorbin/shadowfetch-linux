@@ -1,0 +1,387 @@
+#!/bin/bash
+# Measured graphics verification and NVIDIA setup for Fire Edition.
+set -euo pipefail
+
+KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/cuda-keyring_1.1-1_all.deb"
+KEYRING_SHA256="d0d4ef986a44400f9db33c600ef33a985175e7cc63d805a10e1839c7a1e78f5f"
+
+say() { printf '\033[1;33m==>\033[0m %s\n' "$*"; }
+ok() { printf '\033[1;32m OK\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;31m !!\033[0m %s\n' "$*" >&2; }
+
+usage() {
+    cat <<'EOF'
+shadowfetch-gpu - Detect, install and verify graphics drivers.
+
+USAGE
+  shadowfetch-gpu             review and install a recommended NVIDIA driver
+  shadowfetch-gpu --yes       accept the displayed install plan
+  shadowfetch-gpu --verify    verify kernel driver, render node and Vulkan device
+
+AMD and Intel normally use the Mesa stack shipped in Fire Edition, but readiness
+is measured rather than assumed. NVIDIA setup verifies the repository package,
+uses NVIDIA's hardware selector, checks the built kernel module, and records any
+remaining Secure Boot enrollment step explicitly.
+EOF
+}
+
+version() {
+    printf 'shadowfetch-gpu (Shadowfetch Linux) %s\n' \
+        "$(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"
+}
+
+gpu_lines() {
+    lspci -nn 2>/dev/null | grep -Ei 'VGA|3D|Display' || true
+}
+
+has_nvidia() { gpu_lines | grep -qi nvidia; }
+has_amd() { gpu_lines | grep -Eqi 'AMD|ATI|Radeon'; }
+has_intel() { gpu_lines | grep -qi intel; }
+has_render_node() { compgen -G '/dev/dri/renderD*' >/dev/null; }
+
+is_hybrid() {
+    local lines
+    lines=$(gpu_lines)
+    printf '%s\n' "$lines" | grep -qi nvidia && \
+        printf '%s\n' "$lines" | grep -Eqi 'AMD|ATI|Radeon|Intel'
+}
+
+as_root() {
+    if (( EUID == 0 )); then
+        "$@"
+    elif [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] && command -v pkexec >/dev/null 2>&1; then
+        pkexec "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+vulkan_summary() {
+    command -v vulkaninfo >/dev/null 2>&1 || return 1
+    timeout 20s vulkaninfo --summary 2>/dev/null
+}
+
+record_user_state() {
+    local status=$1 detail=$2 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/shadowfetch"
+    install -d -m 0700 "$state_dir"
+    printf 'status=%s\nchecked=%s\ndetail=%s\n' "$status" "$(date -Is)" "$detail" \
+        > "$state_dir/gpu-status"
+    chmod 0600 "$state_dir/gpu-status"
+    if [[ "$status" == ready ]]; then
+        cp "$state_dir/gpu-status" "$state_dir/gpu-ready"
+    else
+        rm -f "$state_dir/gpu-ready"
+    fi
+}
+
+verify_driver() {
+    local summary renderer_detail hardware_devices
+    echo "Detected graphics:"
+    gpu_lines | sed 's/^/  /'
+    has_render_node || {
+        record_user_state failed "no DRM render node"
+        warn "No DRM render node is available; hardware acceleration is not ready."
+        return 1
+    }
+
+    if has_nvidia; then
+        if ! command -v nvidia-smi >/dev/null 2>&1 \
+            || ! nvidia-smi -L >/dev/null 2>&1; then
+            record_user_state failed "NVIDIA kernel driver inactive"
+            warn "The NVIDIA kernel driver is not active."
+            if lsmod | awk '{print $1}' | grep -Fxq nouveau; then
+                warn "nouveau is active; complete NVIDIA setup and reboot."
+            fi
+            return 1
+        fi
+        if ! lsmod | awk '{print $1}' | grep -Eq '^nvidia(_drm|_modeset|_uvm)?$'; then
+            record_user_state failed "NVIDIA modules not listed"
+            warn "nvidia-smi works, but loaded NVIDIA modules were not listed."
+            return 1
+        fi
+        if lsmod | awk '{print $1}' | grep -Fxq nouveau; then
+            record_user_state failed "nouveau and NVIDIA both loaded"
+            warn "nouveau and NVIDIA modules are both loaded."
+            return 1
+        fi
+        nvidia-smi -L | sed 's/^/  /'
+        ok "nvidia-smi can communicate with the GPU."
+    fi
+
+    if ! summary=$(vulkan_summary); then
+        record_user_state failed "Vulkan probe failed"
+        warn "The Vulkan renderer probe failed; acceleration is not verified."
+        return 1
+    fi
+    hardware_devices=$(printf '%s\n' "$summary" \
+        | awk -F= '/deviceName/ {sub(/^[[:space:]]+/, "", $2); print $2}' \
+        | grep -Evi 'llvmpipe|lavapipe|softpipe|software rasterizer' || true)
+    if [[ -z "$hardware_devices" ]]; then
+        record_user_state failed "software Vulkan renderer"
+        warn "Vulkan did not report a hardware rendering device."
+        return 1
+    fi
+    renderer_detail=$(printf '%s\n' "$hardware_devices" | paste -sd ';' -)
+    printf '%s\n' "$summary" | grep -E 'deviceName|driverName|driverInfo' | sed 's/^/  /' || true
+    if has_nvidia && ! printf '%s\n' "$summary" | grep -qi nvidia; then
+        record_user_state failed "NVIDIA absent from Vulkan devices"
+        warn "NVIDIA is active in nvidia-smi but absent from the Vulkan device list."
+        return 1
+    fi
+    if has_amd && ! has_nvidia && ! printf '%s\n' "$summary" | grep -Eqi 'AMD|Radeon|RADV'; then
+        record_user_state failed "AMD absent from Vulkan devices"
+        warn "The detected AMD GPU is absent from the Vulkan device list."
+        return 1
+    fi
+    if has_intel && ! has_nvidia && ! has_amd && ! printf '%s\n' "$summary" | grep -Eqi 'Intel|ANV'; then
+        record_user_state failed "Intel absent from Vulkan devices"
+        warn "The detected Intel GPU is absent from the Vulkan device list."
+        return 1
+    fi
+    record_user_state ready "$renderer_detail"
+    ok "Hardware Vulkan acceleration is verified."
+}
+
+check_power() {
+    command -v upower >/dev/null 2>&1 || return 0
+    local battery percentage state
+    battery=$(upower -e 2>/dev/null | grep -E '/battery(_|$)|/BAT[0-9]+$' | head -n1 || true)
+    [[ -n "$battery" ]] || return 0
+    percentage=$(upower -i "$battery" 2>/dev/null | awk '/percentage:/ {gsub("%", "", $2); print int($2)}')
+    state=$(upower -i "$battery" 2>/dev/null | awk '/state:/ {print $2}')
+    if [[ "$percentage" =~ ^[0-9]+$ ]] && (( percentage < 30 )) && [[ "$state" == discharging ]]; then
+        warn "Battery is ${percentage}%. Connect power before changing a kernel driver."
+        return 1
+    fi
+}
+
+package_lock_busy() {
+    local lock
+    for lock in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock; do
+        fuser "$lock" >/dev/null 2>&1 && return 0
+    done
+    return 1
+}
+
+apply_driver() {
+    local hybrid=${1:-0} tmpdir keyring headers free log snapshot_id=""
+    local assistant_output recommended installed_keyring
+    (( EUID == 0 )) || { warn "Internal install step requires root."; exit 1; }
+    [[ $(uname -m) == x86_64 ]] || { warn "The NVIDIA setup supports x86_64 only."; exit 2; }
+    has_nvidia || { warn "No NVIDIA GPU was detected."; exit 1; }
+
+    install -d -m 0755 /var/log/shadowfetch /run/lock /var/lib/shadowfetch
+    exec 9>/run/lock/shadowfetch-gpu.lock
+    flock -n 9 || { warn "Another graphics setup is already running."; exit 3; }
+    log="/var/log/shadowfetch/gpu-setup-$(date +%Y%m%d-%H%M%S).log"
+    exec > >(tee -a "$log") 2>&1
+    check_power
+    package_lock_busy && { warn "Another package manager is running."; exit 4; }
+    dpkg --audit | grep -q . && {
+        warn "The package database needs repair first: sudo dpkg --configure -a"
+        exit 5
+    }
+    free=$(df -Pk / | awk 'NR == 2 {print $4}')
+    if [[ ! "$free" =~ ^[0-9]+$ ]] || (( free < 5 * 1024 * 1024 )); then
+        warn "At least 5 GiB of free system-disk space is required."
+        exit 6
+    fi
+
+    tmpdir=$(mktemp -d /var/tmp/shadowfetch-nvidia.XXXXXX)
+    # shellcheck disable=SC2329  # Invoked by the EXIT trap below.
+    cleanup_driver() {
+        local rc=$?
+        # tmpdir/snapshot_id are locals of apply_driver; when this EXIT trap fires
+        # after the function's scope has unwound, they are unset. Guard against
+        # set -u so a real failure surfaces its own message instead of crashing
+        # here with "unbound variable" (which previously masked the true error).
+        [ -n "${tmpdir:-}" ] && rm -rf -- "${tmpdir}"
+        if (( rc != 0 )) && [[ -n "${snapshot_id:-}" ]]; then
+            warn "Driver setup failed; Phoenix Point ${snapshot_id} is available for recovery."
+        fi
+        exit "$rc"
+    }
+    trap cleanup_driver EXIT
+
+    apt_install_no_remove() {
+        local label=$1 simulation
+        shift
+        simulation="$tmpdir/apt-${label}.txt"
+        DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 \
+            -s install "$@" > "$simulation"
+        if grep -q '^Remv ' "$simulation"; then
+            warn "The $label transaction would remove packages, so Shadowfetch refused it."
+            cat "$simulation" >&2
+            return 1
+        fi
+        DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 \
+            --no-remove install -y "$@"
+    }
+
+    keyring="$tmpdir/cuda-keyring.deb"
+
+    say "Adding NVIDIA's signed Debian 13 package repository..."
+    curl --fail --silent --show-error --location \
+        --proto '=https' --tlsv1.2 --retry 5 --retry-all-errors \
+        --connect-timeout 15 --max-time 300 "$KEYRING_URL" -o "$keyring"
+    printf '%s  %s\n' "$KEYRING_SHA256" "$keyring" | sha256sum --check --status
+    ok "NVIDIA repository keyring checksum verified."
+
+    if findmnt -n -o FSTYPE / | grep -qx btrfs \
+        && command -v snapper >/dev/null 2>&1 \
+        && snapper -c root list >/dev/null 2>&1; then
+        say "Creating a pre-driver Phoenix Point..."
+        snapshot_id=$(snapper -c root create --type pre --print-number \
+            --description "Shadowfetch NVIDIA setup $(date -Is)") || {
+            warn "The recovery snapshot failed; the driver was not changed."
+            exit 7
+        }
+        [[ "$snapshot_id" =~ ^[0-9]+$ ]] || {
+            warn "Snapper did not return a valid recovery point number."
+            exit 7
+        }
+        ok "Phoenix Point $snapshot_id created."
+    else
+        warn "Btrfs recovery is unavailable; continuing with the approved driver plan."
+    fi
+
+    installed_keyring=$(dpkg-query -W -f='${Version}' cuda-keyring 2>/dev/null || true)
+    if [[ -n "$installed_keyring" ]] \
+        && dpkg --compare-versions "$installed_keyring" ge 1.1-1; then
+        ok "Keeping installed NVIDIA repository keyring $installed_keyring."
+    else
+        apt_install_no_remove repository-keyring "$keyring"
+    fi
+    apt-get -o DPkg::Lock::Timeout=120 update
+
+    headers="linux-headers-$(uname -r)"
+    say "Installing running-kernel headers and NVIDIA's hardware selector..."
+    apt_install_no_remove driver-prerequisites \
+        "$headers" dkms mokutil nvidia-driver-assistant
+
+    say "NVIDIA's recommendation for this GPU:"
+    if ! assistant_output=$(nvidia-driver-assistant --distro debian:13 2>&1); then
+        printf '%s\n' "$assistant_output" >&2
+        warn "NVIDIA's driver assistant could not produce a recommendation."
+        exit 8
+    fi
+    printf '%s\n' "$assistant_output"
+    recommended=$(printf '%s\n' "$assistant_output" | awk '
+        /sudo apt(-get)? install/ {
+            for (i = 1; i <= NF; i++)
+                if ($i ~ /^(nvidia-open|cuda-drivers)(-[0-9]+)?$/) package = $i
+        }
+        END { print package }
+    ')
+    [[ "$recommended" =~ ^(nvidia-open|cuda-drivers)(-[0-9]+)?$ ]] || {
+        warn "The recommendation was not an allowlisted NVIDIA driver package."
+        exit 8
+    }
+    say "Installing NVIDIA's recommendation: $recommended"
+    apt_install_no_remove recommended-driver "$recommended"
+
+    install -d -m 0755 /etc/modprobe.d
+    cat > /etc/modprobe.d/shadowfetch-nvidia-kms.conf <<'EOF'
+options nvidia-drm modeset=1
+options nvidia-drm fbdev=1
+EOF
+    if [[ "$hybrid" == "0" ]]; then
+        printf '%s\n' 'options nvidia NVreg_PreserveVideoMemoryAllocations=1' \
+            > /etc/modprobe.d/shadowfetch-nvidia-suspend.conf
+        systemctl enable nvidia-suspend.service nvidia-resume.service \
+            nvidia-hibernate.service 2>/dev/null || true
+    else
+        rm -f /etc/modprobe.d/shadowfetch-nvidia-suspend.conf
+    fi
+    modinfo -k "$(uname -r)" nvidia >/dev/null 2>&1 || {
+        warn "The NVIDIA kernel module was not built for $(uname -r)."
+        dkms status || true
+        exit 7
+    }
+    update-initramfs -u -k "$(uname -r)"
+    printf 'status=reboot-required\ninstalled=%s\nkernel=%s\nlog=%s\n' \
+        "$(date -Is)" "$(uname -r)" "$log" > /var/lib/shadowfetch/gpu-install-pending
+
+    rm -f /var/lib/shadowfetch/gpu-mok-enrollment-needed
+    if mokutil --sb-state 2>/dev/null | grep -qi enabled; then
+        warn "Secure Boot is enabled."
+        if [[ -f /var/lib/dkms/mok.pub ]]; then
+            if [[ -t 0 ]]; then
+                echo "Create a one-time password now. At the blue MOK Manager screen after"
+                echo "reboot, choose Enroll MOK, Continue, Yes, then enter that password."
+            fi
+            if [[ ! -t 0 ]] || ! mokutil --import /var/lib/dkms/mok.pub; then
+                printf 'required=%s\nkey=/var/lib/dkms/mok.pub\n' "$(date -Is)" \
+                    > /var/lib/shadowfetch/gpu-mok-enrollment-needed
+                warn "MOK enrollment was not scheduled. The driver is installed, but"
+                warn "Secure Boot may block it until you run: sudo mokutil --import /var/lib/dkms/mok.pub"
+            fi
+        else
+            printf 'required=%s\nkey=missing\n' "$(date -Is)" \
+                > /var/lib/shadowfetch/gpu-mok-enrollment-needed
+            warn "The DKMS MOK public key is missing; inspect $log before reboot."
+        fi
+    fi
+    if [[ -n "$snapshot_id" ]]; then
+        snapper -c root create --type post --pre-number "$snapshot_id" \
+            --description "Shadowfetch NVIDIA setup complete" >/dev/null \
+            || warn "The post-driver recovery marker could not be created."
+    fi
+    ok "Driver module, initramfs, and install state verified. Reboot is required."
+    echo "Diagnostic log: $log"
+    rm -rf -- "$tmpdir"
+    trap - EXIT
+}
+
+case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    --version) version; exit 0 ;;
+    --verify) verify_driver; exit ;;
+    --apply)
+        shift
+        apply_driver "${1:-0}"
+        exit ;;
+esac
+
+echo
+say "Shadowfetch graphics setup"
+gpu_lines | sed 's/^/  /'
+echo
+
+if ! has_nvidia; then
+    verify_driver
+    exit
+fi
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+    verify_driver
+    exit
+fi
+
+hybrid=0
+is_hybrid && hybrid=1
+say "Install plan"
+echo "  - Check power, disk, package locks, and package consistency"
+echo "  - Verify NVIDIA's signed Debian 13 repository package"
+echo "  - Install headers for the running kernel: $(uname -r)"
+echo "  - Let nvidia-driver-assistant select the supported branch and module flavor"
+echo "  - Simulate every package transaction and refuse package removals"
+echo "  - Verify the kernel module, enable DRM KMS, and rebuild the initramfs"
+[[ "$hybrid" == "1" ]] && echo "  - Preserve hybrid graphics mode"
+echo "  - Record Secure Boot enrollment as pending when it cannot be completed"
+echo "  - Reboot, then verify nvidia-smi and the hardware Vulkan renderer"
+echo "  - Installing NVIDIA's packages accepts the license in"
+echo "    /usr/share/nvidia-driver-assistant/driver_eula/LICENSE"
+echo
+
+if [[ "${1:-}" != "--yes" ]]; then
+    read -r -p "Continue? Downloads several hundred MB and needs administrator access. [Y/n] " answer
+    [[ ! "$answer" =~ ^[Nn]$ ]] || { echo "Cancelled; no changes made."; exit 0; }
+fi
+
+as_root "$0" --apply "$hybrid"
+echo
+ok "Installation completed. Reboot, then run: shadowfetch-gpu --verify"
+if [[ -t 0 && "${1:-}" != "--yes" ]]; then
+    read -r -p "Reboot now? [y/N] " answer
+    [[ "$answer" =~ ^[Yy]$ ]] && systemctl reboot
+fi

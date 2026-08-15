@@ -1,0 +1,54 @@
+[Unit]
+Description=Shadowfetch Firewatch telemetry daemon
+Documentation=https://shadowfetch.com/linux/
+# Read-only against the system; the only writable path is /run/shadowfetch
+# (the smartd warning socket). Zero network traffic except polling
+# Buzz shared compute /v1/models on 127.0.0.1.
+After=dbus.service
+Wants=dbus.service
+
+[Service]
+Type=notify
+ExecStart=/usr/libexec/firewatchd
+BusName=org.shadowfetch.Firewatch1
+Restart=on-failure
+RestartSec=5
+
+# /run/shadowfetch is shared with Ember (ember.state lives there too), so it
+# must survive this unit stopping: RuntimeDirectoryPreserve=yes.
+RuntimeDirectory=shadowfetch
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+
+# Hardening (the Firewatch spec set). ProtectSystem=strict makes the whole
+# filesystem read-only for the daemon except the runtime directory above.
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+# AF_UNIX: D-Bus + the smartd socket. AF_INET/AF_INET6: 127.0.0.1 polls only.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# No listening network sockets, and no network traffic beyond loopback.
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=::1/128
+
+# smartctl/nvme need raw device access (SMART passthrough is ioctl-based, so
+# the block devices need rw); NVML needs the nvidia char devices. Listing any
+# DeviceAllow implies DevicePolicy=closed for everything else.
+DeviceAllow=block-* rw
+DeviceAllow=char-nvme rw
+DeviceAllow=char-nvidia* rw
+
+[Install]
+WantedBy=multi-user.target

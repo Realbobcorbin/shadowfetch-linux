@@ -1,0 +1,14 @@
+{
+  "id": "media-ardour",
+  "name": "Ardour",
+  "kind": "apt",
+  "packages": ["ardour", "ardour-data"],
+  "url": null,
+  "sha256": null,
+  "size_bytes": 21600000,
+  "license": "GPL-2.0+ (Debian main)",
+  "min_ram_gb": null,
+  "requires": ["none"],
+  "section": "media",
+  "blurb": "Full digital audio workstation for recording, editing, mixing and mastering."
+}

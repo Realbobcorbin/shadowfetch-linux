@@ -1,0 +1,26 @@
+// Shadowfetch Ember Mode: the active local console user may flip the
+// switch -- start, stop or restart shadowfetch-ember.service -- without a
+// password.
+//
+// Why this is safe to allow: Ember is designed so that the OFF state is
+// always reachable and always automatic.  The performance hold dies with
+// the daemon's bus connection, ExecStopPost restores every recorded
+// mutation, and everything it touches is --runtime/tmpfs.  Flipping the
+// switch can never leave the machine in a state a reboot would not
+// clear.  The pre-flip card in the Control Center says exactly that:
+// "Always returns to Balanced automatically -- safe to try."
+//
+// Scope: exactly this one unit, exactly the start/stop/restart verbs,
+// exactly local + active sessions.  Everything else falls through to the
+// default policy (admin authentication).
+
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "shadowfetch-ember.service" &&
+        subject.local && subject.active) {
+        var verb = action.lookup("verb");
+        if (verb == "start" || verb == "stop" || verb == "restart") {
+            return polkit.Result.YES;
+        }
+    }
+});

@@ -1,0 +1,7 @@
+rm_conffile /etc/systemd/system/flatpak-system-update.service 2.1.4-1~
+rm_conffile /etc/systemd/system/flatpak-system-update.timer 2.1.4-1~
+rm_conffile /etc/systemd/system/rfkill-unblock.service 2.1.4-1~
+rm_conffile /etc/systemd/system/shadowfetch-regdomain.service 2.1.4-1~
+rm_conffile /etc/udev/rules.d/60-shadowfetch-ioschedulers.rules 2.1.4-1~
+rm_conffile /etc/apt/apt.conf.d/80shadowfetch-snapshot 2.1.4-1~
+rm_conffile /etc/systemd/system/ollama.service.d/10-localhost.conf 2.1.4-1~

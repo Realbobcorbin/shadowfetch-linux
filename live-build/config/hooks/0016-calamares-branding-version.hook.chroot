@@ -1,0 +1,69 @@
+#!/bin/sh
+# Shadowfetch hook: derive the Calamares branding version from the shipped
+# version file, so the installer can never announce a version other than the one
+# it is installing.
+#
+# THIS BUG HAS SHIPPED TWICE. The 1.8.1 ISO's installer greeted users with
+# "Welcome to the Calamares installer for Shadowfetch Linux 1.8.0 (Umbra)" -- a
+# public reviewer recorded it on camera. 1.2.5 fixed the same class of drift in
+# exactly one other place ("the text-console login banner now reports the correct
+# version -- it had been stuck on an old string"). And the 2.0.1 build was caught
+# in verification with branding.desc still reading 2.0.0 while os-release, issue,
+# the version file and the SDDM theme had all been bumped.
+#
+# The cause is always the same: the version is written down in one more place
+# than anybody remembers to update. So this stops writing it down. The single
+# source of truth is /usr/share/shadowfetch/version, shipped by
+# shadowfetch-branding, and every field below is computed from it at build time.
+#
+# Fails loudly rather than guessing: if the version file is missing or the
+# rewrite does not take, the build stops. An installer that lies about its own
+# version is how a reviewer concludes the project is careless.
+set -e
+
+VERSION_FILE=/usr/share/shadowfetch/version
+BRANDING=/etc/calamares/branding/debian/branding.desc
+
+if [ ! -r "$VERSION_FILE" ]; then
+    echo "[shadowfetch] FATAL: $VERSION_FILE missing; cannot derive the installer version" >&2
+    exit 1
+fi
+VERSION=$(tr -d ' \t\n\r' < "$VERSION_FILE")
+case "$VERSION" in
+    ''|*[!0-9.]*) echo "[shadowfetch] FATAL: implausible version '$VERSION' in $VERSION_FILE" >&2; exit 1 ;;
+esac
+
+if [ ! -f "$BRANDING" ]; then
+    echo "[shadowfetch] branding.desc absent at $BRANDING; nothing to rewrite" >&2
+    exit 0
+fi
+
+# Codename is read from os-release rather than hardcoded for the same reason.
+CODENAME=$(. /usr/lib/os-release 2>/dev/null; printf '%s' "${VERSION_CODENAME:-}")
+if [ -n "$CODENAME" ]; then
+    PRETTY_CODENAME=$(printf '%s' "$CODENAME" | sed 's/^\(.\)/\U\1/')
+    SUFFIX=" ($PRETTY_CODENAME)"
+else
+    SUFFIX=""
+fi
+
+echo "[shadowfetch] Setting Calamares branding version to $VERSION$SUFFIX"
+sed -i \
+    -e "s|^\( *version: *\).*|\1$VERSION|" \
+    -e "s|^\( *shortVersion: *\).*|\1$VERSION|" \
+    -e "s|^\( *versionedName: *\).*|\1Shadowfetch Linux $VERSION$SUFFIX|" \
+    -e "s|^\( *shortVersionedName: *\).*|\1Shadowfetch $VERSION|" \
+    "$BRANDING"
+
+# Verify. The point of this hook is that a wrong version cannot ship, so a
+# rewrite that silently failed must stop the build rather than pass it through.
+bad=$(grep -nE "^ *(version|shortVersion|versionedName|shortVersionedName):" "$BRANDING" \
+      | grep -v "$VERSION" || true)
+if [ -n "$bad" ]; then
+    echo "[shadowfetch] FATAL: branding.desc still disagrees with $VERSION:" >&2
+    echo "$bad" | sed 's/^/[shadowfetch]   /' >&2
+    exit 1
+fi
+
+grep -E "^ *(version|versionedName):" "$BRANDING" | sed 's/^/[shadowfetch]   /'
+echo "[shadowfetch] Calamares branding now reports $VERSION."

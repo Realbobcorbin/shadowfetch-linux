@@ -1,0 +1,16 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: shadowfetch-themes
+Source: https://www.shadowfetch.com/linux
+Comment: The color schemes, SDDM theme and look-and-feel are derived from KDE Breeze.
+
+Files: *
+Copyright: 2026 Shadowfetch Project <maintainers@shadowfetch.example>
+ 2014-2026 KDE Visual Design Group and contributors (Breeze, derived portions)
+License: LGPL-2.1+
+
+License: LGPL-2.1+
+ This package is free software; you can redistribute it and/or modify it under
+ the terms of the GNU Lesser General Public License as published by the Free
+ Software Foundation; either version 2.1 of the License, or (at your option) any
+ later version. On Debian systems the full text is in
+ /usr/share/common-licenses/LGPL-2.1.

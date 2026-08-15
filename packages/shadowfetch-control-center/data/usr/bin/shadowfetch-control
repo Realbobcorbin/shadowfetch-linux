@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Shadowfetch Control Center - one window runs the machine.
+
+2.1.4 "Fire Edition": six fixed sections - Ignite (Ember Mode), Watch
+(Firewatch), Recover (Phoenix), Local AI, Drivers, and Software & Updates.
+The system tools (Safe Update, System Health, AI Workspaces, Local AI Tools,
+First-run Setup, Graphics & Recovery) all remain reachable inside their
+sections; nothing the old front door offered has been removed.
+"""
+
+# ---- --help / --version, BEFORE any other import ----------------------------
+# Deliberately above the Qt import: this is a GUI tool, and importing PyQt6
+# first would make `--help` die with an import error on a headless machine
+# instead of printing anything. Until 2026-07-26 there was no argument handling
+# here at all.
+import os as _sfsos
+import sys as _sfsys
+if any(_a in ("-h", "--help") for _a in _sfsys.argv[1:]):
+    print("""shadowfetch-control - Shadowfetch Control Center for daily system care.
+
+USAGE
+  shadowfetch-control                    open the control centre
+  shadowfetch-control --page SECTION     open a section directly
+  shadowfetch-control --cli              text-mode menu (no graphics needed)
+
+SECTIONS (for --page; a tab may follow after a colon)
+  ignite      Ember Mode - one switch for speed, always returns to Balanced
+  watch       Firewatch - live sensors, the heat map, local model telemetry
+  recover     Phoenix - restore Points, repair tools, recovery report
+  local-ai    Buzz, local model status and workspaces (aliases: ai, agents)
+  drivers     Graphics, network and printer hardware
+  software    Software & Updates - updates and one-click bundles
+
+  Examples: --page watch:heatmap    --page recover:point=42
+
+WHAT IT DOES
+  A front end to speed, visibility, recovery, updates and local AI.
+  Actions are confirmed; privileged steps go through polkit. If a Control
+  Center window is already open, --page routes inside that window.
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/""")
+    raise SystemExit(0)
+if "--version" in _sfsys.argv[1:]:
+    print("shadowfetch-control (Shadowfetch Linux) " + (open("/usr/share/shadowfetch/version").read().strip() if _sfsos.path.exists("/usr/share/shadowfetch/version") else "unknown"))
+    raise SystemExit(0)
+
+import os
+import subprocess
+import sys
+
+MODULE_DIR = "/usr/share/shadowfetch/control-center"
+if MODULE_DIR not in sys.path:
+    sys.path.insert(0, MODULE_DIR)
+
+
+def cli() -> int:
+    """Text-mode fallback, kept from 2.1.1 so a broken desktop still has a
+    front door to every tool."""
+    print("Shadowfetch Control Center")
+    print("  1) Safe Update")
+    print("  2) System Health")
+    print("  3) AI Workspaces")
+    print("  4) Local AI Tools")
+    print("  5) Graphics & Recovery")
+    try:
+        choice = input("Choose [1-5]: ").strip()
+    except EOFError:
+        return 0
+    commands = {"1": "shadowfetch-update", "2": "shadowfetch-health", "3": "shadowfetch-agent-workspace", "4": "shadowfetch-agent-tools", "5": "shadowfetch-recovery"}
+    command = commands.get(choice)
+    return subprocess.call(command) if command else 0
+
+
+if __name__ == "__main__":
+    if "--cli" in sys.argv or not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        raise SystemExit(cli())
+    from sfcc.app import run
+    raise SystemExit(run(sys.argv))

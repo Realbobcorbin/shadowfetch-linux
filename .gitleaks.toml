@@ -1,0 +1,23 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+    # Flatpak repository descriptors embed a public OpenPGP trust key. Restrict
+    # the exception to that schema field and exact file.
+    [[rules.allowlists]]
+    description = "Flathub public repository signing key"
+    condition = "AND"
+    regexTarget = "match"
+    paths = ['''packages/shadowfetch-branding/data/usr/share/shadowfetch/flathub\.flatpakrepo$''']
+    regexes = ['''^GPGKey=''']
+
+    # Cloudflare Web Analytics injects this public site identifier into browser
+    # JavaScript. It is not an API credential. Match only the named 32-hex field.
+    [[rules.allowlists]]
+    description = "Public Cloudflare Web Analytics site token"
+    condition = "AND"
+    regexTarget = "line"
+    paths = ['''web/shadowfetch-linux-worker/src/index\.js$''']
+    regexes = ['''CLOUDFLARE_WEB_ANALYTICS_TOKEN\s*=\s*"[0-9a-f]{32}"''']

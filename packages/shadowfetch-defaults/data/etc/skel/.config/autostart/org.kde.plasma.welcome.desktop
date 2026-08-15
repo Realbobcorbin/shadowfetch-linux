@@ -1,0 +1,5 @@
+[Desktop Entry]
+Hidden=true
+Type=Application
+Name=KDE Welcome Center (suppressed by Shadowfetch)
+Comment=Shadowfetch uses its own first-boot wizard, so KDE Welcome Center is disabled.

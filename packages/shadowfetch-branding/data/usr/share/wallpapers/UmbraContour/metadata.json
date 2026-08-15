@@ -1,0 +1,12 @@
+{
+ "KPlugin": {
+  "Id": "UmbraContour",
+  "Name": "Umbra Contour",
+  "License": "GPL-3.0",
+  "Authors": [
+   {
+    "Name": "Shadowfetch Project"
+   }
+  ]
+ }
+}

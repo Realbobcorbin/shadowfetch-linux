@@ -1,0 +1,51 @@
+# Shadowfetch 1.0.9 "Quality of Life" — Reddit-pain-point fixes
+# --- Printing (driverless + Epson; HP/modern printers via IPP-Everywhere) ---
+cups
+cups-browsed
+cups-filters
+printer-driver-escpr
+print-manager
+system-config-printer
+# --- Scanning (modern IPP-over-USB) ---
+sane-airscan
+ipp-usb
+simple-scan
+# --- Network shares / phone (SMB discovery + MTP via kio) ---
+kio-extras
+smbclient
+samba-common
+samba-common-bin
+avahi-daemon
+libnss-mdns
+kdenetwork-filesharing
+kdeconnect
+nfs-common
+# --- Windows/exFAT drives ---
+ntfs-3g
+exfatprogs
+# --- Dolphin thumbnails (video + RAW/PS) ---
+ffmpegthumbs
+kdegraphics-thumbnailers
+# --- Archives (RAR/zip; 7z already shipped) ---
+ark
+unrar
+unzip
+# --- Fonts (CJK + metric-compatible MS substitutes) ---
+fonts-noto-cjk
+fonts-liberation2
+# --- Wayland clipboard + screen-share portal ---
+wl-clipboard
+xdg-desktop-portal-kde
+# --- Reliability / maintenance ---
+earlyoom
+unattended-upgrades
+command-not-found
+thermald
+irqbalance
+# --- Laptop hardware ---
+brightnessctl
+acpid
+acpi-support
+v4l-utils
+fprintd
+libpam-fprintd

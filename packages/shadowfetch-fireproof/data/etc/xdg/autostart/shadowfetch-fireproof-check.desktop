@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Shadowfetch Fireproof boot check
+Comment=Opens recovery at the right Phoenix Point after a failed post-update boot; otherwise posts the login notification when updates are pending and not suppressed
+Exec=/usr/libexec/fireproof-session-check
+Icon=system-software-update
+NoDisplay=true
+X-KDE-autostart-phase=2
+X-KDE-StartupNotify=false
+OnlyShowIn=KDE;

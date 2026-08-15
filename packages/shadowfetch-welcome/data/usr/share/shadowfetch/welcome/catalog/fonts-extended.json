@@ -1,0 +1,18 @@
+{
+  "id": "fonts-extended",
+  "name": "Extended language fonts",
+  "kind": "apt",
+  "packages": [
+    "fonts-noto-extra",
+    "fonts-noto-cjk-extra"
+  ],
+  "url": "",
+  "sha256": "",
+  "size_bytes": 180000000,
+  "license": "OFL-1.1",
+  "min_ram_gb": 0,
+  "requires": [
+    "none"
+  ],
+  "blurb": "Full Noto coverage for less common scripts and the extended CJK variants. The base image ships Noto Core plus CJK, which covers most languages; install this if text in a specific script renders as boxes."
+}

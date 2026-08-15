@@ -1,0 +1,3 @@
+ERROR: [Loader Message] Code 0 : vkCreateInstance: Found no drivers!
+vulkaninfo: error: Cannot create Vulkan instance.
+This problem is often caused by a faulty installation of the Vulkan driver or attempting to use a GPU that does not support Vulkan.

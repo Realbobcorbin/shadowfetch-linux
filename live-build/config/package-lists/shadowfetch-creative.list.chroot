@@ -1,0 +1,49 @@
+# Shadowfetch creative workstation packages — V1.0 SHIP LIST
+#
+# Aggressively trimmed for ISO 9660's 4GiB squashfs limit. Each category
+# ships 1-3 best-of-breed apps. Everything else is one `apt install` or
+# Discover-click away — the full APT archive is on the ISO.
+#
+# Things deliberately dropped from v1 (available post-install):
+#   blender, freecad, scribus, digikam, hugin, luminance-hdr, fontforge,
+#   sonic-pi, puredata, shotcut, openshot-qt, handbrake, mkvtoolnix-gui,
+#   mediainfo-gui, simplescreenrecorder, peek, hydrogen, qtractor,
+#   musescore3, mixxx, rosegarden, lmms, carla, zynaddsubfx, swh-plugins,
+#   mda-lv2, guitarix, dragonfly-reverb, displaycal, gnome-color-manager,
+#   fontmatrix, gucharmap, graphicsmagick
+
+# === 2D / Visual ===
+krita
+inkscape
+
+# === 3D ===
+openscad
+
+# === Photography / Raw ===
+
+# === Audio production ===
+# 2.1.2 Fire: moved to the Welcome one-click catalog (founder decision) -- ardour
+audacity
+qpwgraph
+
+# LV2 / LADSPA plugin sets (the must-haves)
+# 2.1.2 Fire: moved to the Welcome Pro Audio preset -- x42-plugins
+# 2.1.2 Fire: moved to the Welcome Pro Audio preset -- calf-plugins
+
+# === Video ===
+kdenlive
+v4l2loopback-dkms
+
+# === Color management ===
+# 2.1.2 Fire: moved to the Welcome Photography preset -- argyll
+colord
+
+# === Utilities for creatives ===
+imagemagick
+exiftool
+jpegoptim
+optipng
+webp
+
+# --- v1.3.1: more video tools ---
+# 2.1.2 Fire: moved to the Welcome one-click catalog (founder decision) -- shotcut

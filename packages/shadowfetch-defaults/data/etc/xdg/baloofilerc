@@ -1,0 +1,6 @@
+[Basic Settings]
+Indexing-Enabled=true
+
+[General]
+only basic indexing=true
+exclude folders[$e]=$HOME/.local/share/Steam/,$HOME/.var/,$HOME/Downloads/

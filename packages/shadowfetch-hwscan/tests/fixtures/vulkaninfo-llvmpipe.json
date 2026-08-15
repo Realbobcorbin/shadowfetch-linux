@@ -1,0 +1,18 @@
+{
+ "GPU0": {
+  "VkPhysicalDeviceProperties": {
+   "deviceName": "llvmpipe (LLVM 19.1.7, 256 bits)",
+   "deviceType": "PHYSICAL_DEVICE_TYPE_CPU",
+   "vendorID": 65541,
+   "deviceID": 0
+  },
+  "VkPhysicalDeviceMemoryProperties": {
+   "memoryHeaps": [
+    {
+     "size": 8253634560,
+     "flags": ["MEMORY_HEAP_DEVICE_LOCAL_BIT"]
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Graphics Driver Setup
+GenericName=Graphics driver setup and verification
+Comment=Install NVIDIA's recommended driver or verify the active Mesa stack
+Exec=konsole -e bash -c "shadowfetch-gpu; echo; read -p \"Press Enter to close…\""
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=GPU;NVIDIA;AMD;Intel;driver;graphics;

@@ -1,0 +1,6 @@
+# Shadowfetch Linux — creator stack (1.5.0): system-wide audio FX/routing + design tools.
+# Turns "has audio apps" (Ardour/Audacity/OBS) into "is a creator OS".
+easyeffects
+pipewire-jack
+gcolor3
+skanpage

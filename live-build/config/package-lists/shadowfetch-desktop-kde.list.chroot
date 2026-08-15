@@ -1,0 +1,72 @@
+# Shadowfetch desktop — KDE Plasma stack
+# Plasma 6 on Debian testing — modern, Wayland-first, properly themed.
+
+# Shadowfetch metas (from our local apt repo, wired in via archives/)
+shadowfetch-desktop
+shadowfetch-creative-base
+# shadowfetch-nvidia removed from chroot install — moved to first-boot hook
+# (NVIDIA driver DKMS doesn't build cleanly against the chroot's kernel
+# headers; building during first-boot on the real installed kernel works.)
+
+# Plasma core
+kde-plasma-desktop
+plasma-workspace
+# plasma-workspace-wayland — merged into plasma-workspace in Plasma 6
+plasma-nm
+plasma-pa
+plasma-systemmonitor
+plasma-disks
+plasma-firewall
+plasma-vault
+powerdevil
+bluedevil
+kde-config-sddm
+sddm
+# sddm-theme-debian-breeze — REMOVED v1.0.1 (was hijacking branding with the
+# Debian swirl on the login screen; the 0015-sddm-autologin hook forces breeze.)
+
+# Wayland session bits
+xwayland
+qtwayland5
+kwin-wayland
+
+# KDE applications worth shipping by default
+dolphin
+konsole
+kate
+ark
+# spectacle — temporarily dropped; KDE 6 package layout shifted. Revisit.
+gwenview
+okular
+kcalc
+kfind
+filelight
+kcolorchooser
+partitionmanager
+kdeconnect
+plasma-browser-integration
+kio-extras
+kio-gdrive
+
+# Theming infrastructure
+qt5-style-kvantum
+# qt5-style-kvantum-themes — not in Debian testing; revisit
+papirus-icon-theme
+kde-style-breeze
+breeze-cursor-theme
+
+# Plasma extras useful for creators
+# krunner — part of plasma-workspace in Plasma 6 (transitively installed)
+plasma-thunderbolt
+print-manager
+colord-kde
+
+# Daily-driver apps a desktop OS can't ship without (added in v1.0.2)
+firefox-esr
+vlc
+keepassxc
+
+# Plymouth (boot splash) — Shadowfetch ships a custom theme via shadowfetch-branding
+plymouth
+plymouth-themes
+qt6-wayland

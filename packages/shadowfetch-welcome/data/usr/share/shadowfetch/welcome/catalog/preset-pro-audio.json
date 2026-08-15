@@ -1,0 +1,31 @@
+{
+  "id": "preset-pro-audio",
+  "name": "Pro Audio preset",
+  "kind": "preset",
+  "packages": [
+    "ardour",
+    "hydrogen",
+    "hydrogen-data",
+    "audacity",
+    "qpwgraph",
+    "lsp-plugins",
+    "calf-plugins",
+    "pipewire-jack",
+    "easyeffects",
+    "zam-plugins",
+    "x42-plugins"
+  ],
+  "url": null,
+  "sha256": null,
+  "size_bytes": null,
+  "license": "Free software (Debian main)",
+  "min_ram_gb": null,
+  "requires": [
+    "none"
+  ],
+  "section": "presets",
+  "post_config": [
+    "audio-realtime"
+  ],
+  "blurb": "One click, one install: Ardour, Hydrogen drum machine, Audacity, the qpwgraph PipeWire patchbay, the LSP and Calf plugin suites, the PipeWire JACK bridge and EasyEffects - plus realtime audio configuration (rtprio and memory locking) for your account."
+}

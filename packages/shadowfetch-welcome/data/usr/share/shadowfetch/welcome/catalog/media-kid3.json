@@ -1,0 +1,13 @@
+{
+  "id": "media-kid3",
+  "name": "Kid3",
+  "kind": "apt",
+  "packages": ["kid3"],
+  "url": "",
+  "sha256": "",
+  "size_bytes": 800000,
+  "license": "GPL-2.0-or-later",
+  "min_ram_gb": 0,
+  "requires": ["none"],
+  "blurb": "Audio tag editor - batch-edit ID3, Vorbis, FLAC and MP4 tags, rename files from tags and import from online databases. About 0.8 MB to download, 2.9 MB installed; measured exactly at ISO build time."
+}

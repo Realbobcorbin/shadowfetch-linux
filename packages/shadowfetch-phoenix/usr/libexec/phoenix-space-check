@@ -1,0 +1,109 @@
+#!/bin/sh
+# phoenix-space-check - free-space guard run by apt BEFORE 80snapper's pre
+# snapshot (via /etc/apt/apt.conf.d/79phoenix-space, which sorts first).
+# Part of Shadowfetch Linux 2.1.2 "Fire Edition".
+#
+# Why: snapper-cleanup runs on a timer, so a big dist-upgrade landing between
+# timer runs could ENOSPC mid-dpkg. This hook closes that window:
+#
+#   free < 10% of the volume  ->  synchronously run `snapper cleanup number`
+#                                 and GC stale @_prev_* restore leftovers
+#   free still < 2 GiB        ->  desktop warning naming the space problem
+#                                 before the transaction proceeds
+#
+# NEVER blocks or fails the transaction: every path exits 0, and the apt
+# hook line additionally carries `|| true`. Warnings inform; apt decides.
+
+set -u
+
+case "${1:-}" in
+  -h|--help)
+    cat <<'SFHELP'
+phoenix-space-check - pre-transaction Btrfs free-space guard (apt hook).
+
+USAGE
+  phoenix-space-check     reclaim space if <10% free; warn if still <2 GiB
+
+Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+SFHELP
+    exit 0 ;;
+  --version)
+    echo "phoenix-space-check (Shadowfetch Linux) $(cat /usr/share/shadowfetch/version 2>/dev/null || echo unknown)"; exit 0 ;;
+esac
+
+# Only meaningful on a Btrfs root with the tools present.
+[ "$(stat -f -c %T / 2>/dev/null)" = "btrfs" ] || exit 0
+command -v btrfs >/dev/null 2>&1 || exit 0
+[ "$(id -u)" -eq 0 ] || exit 0
+
+# btrfs filesystem usage -b prints exact byte counts:
+#   Device size:      ...
+#   Free (estimated): ...  (min: ...)
+usage_bytes() {
+    # $1 = label regex fragment
+    btrfs filesystem usage -b / 2>/dev/null \
+        | sed -n "s/^[[:space:]]*$1:[[:space:]]*\([0-9][0-9]*\).*/\1/p" \
+        | head -n 1
+}
+
+size=$(usage_bytes "Device size")
+free=$(usage_bytes "Free (estimated)")
+case "$size" in ''|*[!0-9]*) exit 0 ;; esac
+case "$free" in ''|*[!0-9]*) exit 0 ;; esac
+
+tenth=$((size / 10))
+two_gib=2147483648
+
+if [ "$free" -lt "$tenth" ]; then
+    echo "phoenix-space-check: ${free} bytes free (<10% of volume) - reclaiming space before this transaction" >&2
+
+    # 1. Let snapper apply its number-cleanup policy right now.
+    if command -v snapper >/dev/null 2>&1 && [ -f /etc/snapper/configs/root ]; then
+        snapper --no-dbus -c root cleanup number >/dev/null 2>&1 || true
+    fi
+
+    # 2. GC stale @_prev_* restore leftovers beyond the most recent.
+    dev=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+    dev=${dev%%\[*}
+    if [ -n "$dev" ] && [ -b "$dev" ]; then
+        mnt=$(mktemp -d /run/phoenix-space.XXXXXX)
+        if mount -t btrfs -o subvolid=5 "$dev" "$mnt" 2>/dev/null; then
+            newest=$(ls -d "$mnt"/@_prev_* 2>/dev/null | sort | tail -n 1)
+            for p in "$mnt"/@_prev_*; do
+                [ -d "$p" ] || continue
+                [ "$p" = "$newest" ] && continue
+                btrfs subvolume delete "$p" >/dev/null 2>&1 || true
+            done
+            btrfs filesystem sync "$mnt" >/dev/null 2>&1 || true
+            umount "$mnt" 2>/dev/null || true
+        fi
+        rmdir "$mnt" 2>/dev/null || true
+    fi
+
+    free=$(usage_bytes "Free (estimated)")
+    case "$free" in ''|*[!0-9]*) exit 0 ;; esac
+fi
+
+if [ "$free" -lt "$two_gib" ]; then
+    free_mb=$((free / 1048576))
+    msg="Only ${free_mb} MB free on the system volume. The package operation will still run, but a large update could fill the disk. Free some space, or remove old Phoenix Points from Control Center > Phoenix."
+    echo "phoenix-space-check: WARNING: $msg" >&2
+
+    # Best-effort desktop notification to every graphical session.
+    if command -v notify-send >/dev/null 2>&1; then
+        for d in /run/user/*; do
+            [ -d "$d" ] && [ -S "$d/bus" ] || continue
+            uid=${d##*/}
+            case "$uid" in *[!0-9]*) continue ;; esac
+            user=$(getent passwd "$uid" | cut -d: -f1)
+            [ -n "$user" ] || continue
+            runuser -u "$user" -- env \
+                XDG_RUNTIME_DIR="$d" \
+                DBUS_SESSION_BUS_ADDRESS="unix:path=$d/bus" \
+                notify-send --app-name="Phoenix Recovery" -u critical \
+                "Low disk space" "$msg" >/dev/null 2>&1 || true
+        done
+    fi
+fi
+
+exit 0
