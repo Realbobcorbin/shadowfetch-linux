@@ -1,12 +1,9 @@
-<p>
-  <img alt="Shadowfetch Linux Umbra desktop" src="https://www.shadowfetch.com/linux/assets/desktop-umbra.webp" width="49%">
-  <img alt="Shadowfetch Control Center" src="https://www.shadowfetch.com/linux/assets/control-center.webp" width="49%">
-</p>
-<p>
-  <img alt="Shadowfetch Welcome / Ignition Setup" src="https://www.shadowfetch.com/linux/assets/welcome.webp" width="32%">
-  <img alt="Shadowfetch application menu" src="https://www.shadowfetch.com/linux/assets/apps-menu.webp" width="32%">
-  <img alt="Firewatch and Phoenix Recovery" src="https://www.shadowfetch.com/linux/assets/agent-studio.webp" width="32%">
-</p>
+![Shadowfetch Linux Umbra desktop](https://www.shadowfetch.com/linux/assets/desktop-umbra.webp)
+![Shadowfetch Control Center](https://www.shadowfetch.com/linux/assets/control-center.webp)
+
+![Shadowfetch Welcome / Ignition Setup](https://www.shadowfetch.com/linux/assets/welcome.webp)
+![Shadowfetch application menu](https://www.shadowfetch.com/linux/assets/apps-menu.webp)
+![Firewatch and Phoenix Recovery](https://www.shadowfetch.com/linux/assets/agent-studio.webp)
 
 # Shadowfetch Linux — "Umbra" / Fire Edition
 
@@ -71,10 +68,10 @@ A GPG *"not certified with a trusted signature"* warning only means you have not
 `8F13 CE15 35EE 1F4A 2916  A1F7 3C5C 900B 7BE8 0CA1`
 
 **Mirrors (same ISO, same checksums):**
-- Primary: <https://www.shadowfetch.com/linux/download>
-- Archive.org: <https://archive.org/details/shadowfetch-linux-2-1-4> (ISO, `SHA256SUMS`, `.asc`, torrent)
+- Primary: https://www.shadowfetchlinux.org/download
+- Archive.org: https://archive.org/details/shadowfetch-linux-2-1-4 (ISO, `SHA256SUMS`, `.asc`, torrent)
 
-**Guides:** [Install](https://www.shadowfetch.com/linux/install) · [Verify](https://www.shadowfetch.com/linux/verify) · [Security model](https://www.shadowfetch.com/linux/security) · [Known issues](https://www.shadowfetch.com/linux/known-issues)
+**Guides:** [Install](https://www.shadowfetchlinux.org/install) · [Verify](https://www.shadowfetchlinux.org/verify) · [Security model](https://www.shadowfetchlinux.org/security) · [Known issues](https://www.shadowfetchlinux.org/known-issues)
 
 ### Writing the USB stick
 
@@ -97,7 +94,7 @@ The ISO boots a live KDE session as the user `shadow` (password `shadow`, passwo
 | **Graphics** | Intel/AMD (Mesa) or NVIDIA (proprietary) | — | NVIDIA/AMD for accelerated local models |
 
 - Intel and AMD graphics use the normal Mesa stack. NVIDIA systems ship with the proprietary NVIDIA stack; non-NVIDIA systems remove it after first boot. Hybrid laptops may need manual tuning.
-- **Secure Boot is not signed yet** — disable it, or use the [secure-boot guide](https://www.shadowfetch.com/linux/secure-boot).
+- **Secure Boot is not signed yet** — disable it, or use the [secure-boot guide](https://www.shadowfetchlinux.org/secure-boot).
 - Encrypted installs (LUKS2 on Btrfs) are supported and validated on both BIOS and UEFI paths.
 
 ---
@@ -154,7 +151,7 @@ Build on a Debian or Ubuntu host (others may work but are untested). You need ro
 make deps       # install build dependencies (live-build, reprepro, debhelper, qemu, …)
 make packages   # build the in-house shadowfetch-* .deb packages
 make repo       # assemble the signed reprepro APT repository (suite "umbra")
-sudo make iso   # build shadowfetch-<version>-amd64.iso in the repo root
+sudo make iso   # build shadowfetch-$VERSION-amd64.iso in the repo root
 make qemu       # boot the freshly built ISO in QEMU to smoke-test it
 ```
 
@@ -170,14 +167,13 @@ Version is controlled by the Makefile: `VERSION ?= 2.1.4` and `CODENAME ?= umbra
 
 Shadowfetch Linux publishes signed ISO releases, a signed APT repository, SHA-256 checksums, detached GPG signatures, and a public signing key. Verifying the ISO checks two independent things: the **checksum** proves the file downloaded intact, and the **GPG signature** proves it is what Shadowfetch signed.
 
-See [`SECURITY.md`](SECURITY.md), the [security model](https://www.shadowfetch.com/linux/security), and the [verification guide](https://www.shadowfetch.com/linux/verify). Report security-sensitive findings privately; never attach secrets, private keys, password exports or unredacted diagnostics to public issues.
+See [`SECURITY.md`](SECURITY.md), the [security model](https://www.shadowfetchlinux.org/security), and the [verification guide](https://www.shadowfetchlinux.org/verify). Report security-sensitive findings privately; never attach secrets, private keys, password exports or unredacted diagnostics to public issues.
 
 ---
 
 ## Support & contributing
 
-- **GitHub Discussions** — support questions, installation reports, hardware notes.
-- **GitHub Issues** — reproducible bugs and build/release problems.
+- **GitHub Issues** — bugs, installation reports, hardware notes, and patches: https://github.com/Realbobcorbin/shadowfetch-linux/issues
 
 A good **bug report** includes: exact ISO filename and whether the checksum matched; UEFI vs legacy BIOS and Secure Boot state; CPU/GPU/RAM/disk layout/Wi-Fi chipset; for installer failures, where Calamares stopped and whether the live session worked; and redacted `shadowfetch-health --json` output.
 
@@ -199,5 +195,5 @@ Shadowfetch Linux is an **aggregate**: the ISO bundles many upstream Debian pack
 ## Release notes & links
 
 - Latest: [`docs/RELEASE-2.1.4.md`](docs/RELEASE-2.1.4.md) · prior: `docs/RELEASE-2.1.1.md`, `docs/RELEASE-2.0.0.md`, `docs/RELEASE-1.9.0.md`
-- [Download](https://www.shadowfetch.com/linux/download) · [Verify](https://www.shadowfetch.com/linux/verify) · [Install](https://www.shadowfetch.com/linux/install) · [Security](https://www.shadowfetch.com/linux/security) · [Known issues](https://www.shadowfetch.com/linux/known-issues) · [Docs](https://www.shadowfetch.com/linux/docs)
-- Changelog / release feed: <https://www.shadowfetch.com/linux/releases.json>
+- [Download](https://www.shadowfetchlinux.org/download) · [Verify](https://www.shadowfetchlinux.org/verify) · [Install](https://www.shadowfetchlinux.org/install) · [Security](https://www.shadowfetchlinux.org/security) · [Known issues](https://www.shadowfetchlinux.org/known-issues) · [Docs](https://www.shadowfetchlinux.org/docs)
+- Changelog / release feed: https://www.shadowfetchlinux.org/releases.json
