@@ -10,9 +10,9 @@ Current signing key fingerprint:
 
 `8F13 CE15 35EE 1F4A 2916 A1F7 3C5C 900B 7BE8 0CA1`
 
-Current verification guide: https://www.shadowfetch.com/linux/verify
+Current verification guide: https://www.shadowfetchlinux.org/verify
 
-Security model: https://www.shadowfetch.com/linux/security
+Security model: https://www.shadowfetchlinux.org/security
 
 A normal GPG "not certified with a trusted signature" warning means you have not personally trusted the key; it is not the same as a failed signature. Compare the fingerprint above before trusting the download.
 
@@ -31,4 +31,4 @@ Please do not post:
 - full disk serial inventories if you do not want them public;
 - logs that include private hostnames, usernames, or network names without redaction.
 
-Use Discussions for support questions and non-sensitive installation notes.
+Use GitHub Issues for support questions, hardware reports, and non-sensitive installation notes: https://github.com/Realbobcorbin/shadowfetch-linux/issues
