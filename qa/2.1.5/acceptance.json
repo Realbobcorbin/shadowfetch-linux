@@ -996,7 +996,7 @@
       "required": true,
       "status": "pending",
       "evidence": [],
-      "notes": ""
+      "notes": "GitHub (release v2.1.5 + main + RELEASE-2.1.5.md) and shadowfetchlinux.org expose the approved 2.1.5 release. Archive.org mirror upload is the remaining manual step (needs the owner archive.org account)."
     },
     {
       "id": "PUB-02",
@@ -1004,9 +1004,15 @@
       "area": "publication",
       "title": "Fresh public downloads, checksum, signature, metadata and rollback URLs verify",
       "required": true,
-      "status": "pending",
-      "evidence": [],
-      "notes": ""
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "report",
+          "path": "publish-2.1.5/pub02-downloads.txt",
+          "sha256": "94c70fdbafff1959ab749cd4bfa3e44199f746c261aa972b3071dfa72603c5a1"
+        }
+      ],
+      "notes": "Public ISO 200 at 3968471040 bytes; full re-download re-hashes to 848f043e (byte-identical to the signed release); sha256 sidecar and detached signature 200; APT InRelease valid to 2026-09-02 with 14 packages at 2.1.5-1. 2.1.4 ISO intentionally pruned per release decision."
     },
     {
       "id": "PUB-03",
@@ -1014,9 +1020,15 @@
       "area": "publication",
       "title": "Public Linux page displays approved 2.1.5 screenshots from the final ISO",
       "required": true,
-      "status": "pending",
-      "evidence": [],
-      "notes": ""
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "report",
+          "path": "publish-2.1.5/pub03-screenshots.txt",
+          "sha256": "7c2d38a7bdec4f26ed6809481ca81d83190bda12282261e53bf924c7aabd1ea9"
+        }
+      ],
+      "notes": "shadowfetchlinux.org/screenshots serves the six final-ISO 2.1.5 captures (desktop, welcome/Guide, System Passport, AI workspace, Local AI, installer); assets return 200 image/webp."
     },
     {
       "id": "PUB-04",
@@ -1024,9 +1036,15 @@
       "area": "publication",
       "title": "Public top navigation exposes Buzz and opens the official Block repository",
       "required": true,
-      "status": "pending",
-      "evidence": [],
-      "notes": ""
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "report",
+          "path": "publish-2.1.5/pub04-buzz.txt",
+          "sha256": "1c89d1b89b095a8911d91ebd865d6e21b9e351b09231cb4bff6b9dbcbd11392a"
+        }
+      ],
+      "notes": "Top navigation exposes a Buzz entry that opens the official Block repository github.com/block/buzz."
     }
   ]
 }
