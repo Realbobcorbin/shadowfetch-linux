@@ -1,0 +1,786 @@
+#!/usr/bin/env python3
+"""Shadowfetch System Passport - private, read-only compatibility checks.
+
+The Passport is the deterministic core of Shadowfetch Guide. It turns the
+broader local hardware inventory into a deliberately small, redacted report
+that is useful before installation and after an upgrade. It never uploads,
+installs, repairs, or asks for elevated privileges.
+
+Raw collectors can see identifiers that are useful for repair work. This tool
+does not pass those fields through. The public schema is assembled from an
+allowlist and then checked for identifier-shaped keys and values before output.
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import html
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+
+SCHEMA_VERSION = 1
+PASSPORT_VERSION = "1.0"
+FACTS_TIMEOUT = 45
+HWSCAN_TIMEOUT = 10
+VERSION_FILE = Path("/usr/share/shadowfetch/version")
+HWSCAN_FILE = Path("/var/lib/shadowfetch/hwscan.json")
+
+STATUS_LABELS = {
+    "ready": "Ready",
+    "note": "Ready with a note",
+    "attention": "Needs attention",
+    "unknown": "Could not verify",
+    "not-present": "Not detected",
+}
+
+FORBIDDEN_KEYS = {
+    "address", "addresses", "device_path", "file", "host", "hostname",
+    "ip", "mac", "mount", "path", "serial", "slot", "source_line",
+    "user", "username", "uuid",
+}
+MAC_RE = re.compile(r"(?i)(?<![0-9a-f])(?:[0-9a-f]{2}:){5}[0-9a-f]{2}(?![0-9a-f])")
+IPV4_RE = re.compile(
+    r"(?<!\d)(?:25[0-5]|2[0-4]\d|1?\d?\d)"
+    r"(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?!\d)"
+)
+UUID_RE = re.compile(
+    r"(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![0-9a-f])"
+)
+
+
+def _run_json(argv: list[str], timeout: int) -> dict | None:
+    try:
+        result = subprocess.run(
+            argv, capture_output=True, text=True, timeout=timeout, check=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        value = json.loads(result.stdout)
+        return value if isinstance(value, dict) else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def _read_json(path: Path) -> dict | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _facts_command() -> list[str] | None:
+    installed = shutil.which("shadowfetch-facts")
+    if installed:
+        return [installed, "--json"]
+    sibling = Path(__file__).with_name("shadowfetch-facts")
+    if sibling.is_file():
+        return [sys.executable, str(sibling), "--json"]
+    return None
+
+
+def _hwscan_command() -> list[str] | None:
+    for candidate in (
+        shutil.which("shadowfetch-hwscan"),
+        "/usr/libexec/shadowfetch-hwscan",
+    ):
+        if candidate and os.access(candidate, os.X_OK):
+            return [candidate, "--json"]
+    return None
+
+
+def _release_version() -> str:
+    override = os.environ.get("SHADOWFETCH_VERSION_OVERRIDE", "").strip()
+    if override:
+        return override
+    try:
+        return VERSION_FILE.read_text(encoding="utf-8").strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+def _section(document: dict, name: str) -> tuple[dict | None, str]:
+    node = ((document or {}).get("facts") or {}).get(name)
+    if not isinstance(node, dict):
+        return None, "collector did not return this section"
+    if not node.get("available"):
+        return None, str(node.get("note") or "source unavailable")
+    data = node.get("data")
+    return (data if isinstance(data, dict) else {}), ""
+
+
+def _probe_small_facts() -> dict:
+    """Collect booleans and aggregate sizes only; never identifiers."""
+    result = {
+        "live_session": Path("/run/live/medium").exists()
+        or Path("/run/live/rootfs").exists(),
+        "camera_count": len(glob.glob("/dev/video*")),
+        "bluetooth_count": len(glob.glob("/sys/class/bluetooth/hci*")),
+        "audio_session": "unknown",
+        "disk_count": 0,
+        "largest_disk_gib": None,
+        "uefi": Path("/sys/firmware/efi").is_dir(),
+        "secure_boot": "unknown",
+    }
+
+    if shutil.which("wpctl"):
+        try:
+            proc = subprocess.run(
+                ["wpctl", "status"], capture_output=True, text=True,
+                timeout=5, check=False,
+            )
+            if proc.returncode == 0:
+                result["audio_session"] = "ready"
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    elif shutil.which("pactl"):
+        try:
+            proc = subprocess.run(
+                ["pactl", "info"], capture_output=True, text=True,
+                timeout=5, check=False,
+            )
+            if proc.returncode == 0:
+                result["audio_session"] = "ready"
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    if shutil.which("lsblk"):
+        try:
+            proc = subprocess.run(
+                ["lsblk", "-J", "-b", "-d", "-o", "TYPE,SIZE,RM"],
+                capture_output=True, text=True, timeout=6, check=False,
+            )
+            rows = json.loads(proc.stdout).get("blockdevices", [])
+            sizes = []
+            for row in rows:
+                if not isinstance(row, dict) or row.get("type") != "disk":
+                    continue
+                if bool(row.get("rm")):
+                    continue
+                try:
+                    size = int(row.get("size") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if size > 0:
+                    sizes.append(size)
+            result["disk_count"] = len(sizes)
+            if sizes:
+                result["largest_disk_gib"] = round(max(sizes) / 1024 ** 3, 1)
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+
+    if shutil.which("mokutil"):
+        try:
+            proc = subprocess.run(
+                ["mokutil", "--sb-state"], capture_output=True, text=True,
+                timeout=5, check=False,
+            )
+            state = (proc.stdout + proc.stderr).lower()
+            if "secureboot enabled" in state:
+                result["secure_boot"] = "enabled"
+            elif "secureboot disabled" in state:
+                result["secure_boot"] = "disabled"
+            elif "efi variables are not supported" in state:
+                result["secure_boot"] = "not-available"
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return result
+
+
+def collect_inputs() -> tuple[dict, dict | None, dict]:
+    command = _facts_command()
+    facts = _run_json(command, FACTS_TIMEOUT) if command else None
+    if facts is None:
+        facts = {"facts": {}, "unavailable_sections": ["all"]}
+
+    hwscan = _read_json(HWSCAN_FILE)
+    command = _hwscan_command()
+    if command:
+        fresh = _run_json(command, HWSCAN_TIMEOUT)
+        if fresh is not None:
+            hwscan = fresh
+    return facts, hwscan, _probe_small_facts()
+
+
+def _check(
+    check_id: str,
+    label: str,
+    status: str,
+    summary: str,
+    source: str,
+    route: str | None = None,
+    action: str | None = None,
+) -> dict:
+    record = {
+        "id": check_id,
+        "label": label,
+        "status": status,
+        "status_label": STATUS_LABELS[status],
+        "summary": summary,
+        "source": source,
+    }
+    if route and action:
+        record["route"] = route
+        record["action"] = action
+    return record
+
+
+def _graphics_check(facts: dict) -> dict:
+    data, note = _section(facts, "graphics")
+    if data is None:
+        return _check("graphics", "Graphics", "unknown",
+                      "Graphics acceleration could not be verified.",
+                      "local graphics probe")
+    cards = data.get("cards") if isinstance(data.get("cards"), list) else []
+    missing = [card for card in cards
+               if isinstance(card, dict) and not card.get("driver")]
+    renderer = str(data.get("renderer") or "").strip()
+    if data.get("software_rendering"):
+        return _check(
+            "graphics", "Graphics", "attention",
+            "The desktop is using software rendering instead of the graphics card.",
+            "local graphics probe", "drivers", "Open Drivers",
+        )
+    if missing:
+        return _check(
+            "graphics", "Graphics", "attention",
+            f"{len(missing)} graphics device(s) have no active kernel driver.",
+            "local PCI driver probe", "drivers", "Open Drivers",
+        )
+    if data.get("accelerated"):
+        summary = "Hardware graphics acceleration is active."
+        if renderer:
+            summary += f" Renderer: {renderer[:120]}."
+        return _check("graphics", "Graphics", "ready", summary,
+                      "local renderer and PCI driver probes")
+    if cards:
+        return _check(
+            "graphics", "Graphics", "note",
+            "A graphics driver is bound, but the active renderer was not proven.",
+            "local renderer and PCI driver probes", "drivers", "Verify graphics",
+        )
+    return _check("graphics", "Graphics", "unknown",
+                  "No graphics device was reported by the local probe.",
+                  "local graphics probe")
+
+
+def _network_check(facts: dict) -> tuple[dict, int, int]:
+    data, note = _section(facts, "network")
+    if data is None:
+        return (_check("network", "Network", "unknown",
+                       "Network hardware could not be verified.",
+                       "local network link probe"), 0, 0)
+    rows = data.get("interfaces") if isinstance(data.get("interfaces"), list) else []
+    virtual_name = re.compile(
+        r"^(?:lo|docker|podman|veth|virbr|br-|tun|tap|wg|tailscale|zt|dummy)",
+        re.I,
+    )
+    adapters = [
+        row for row in rows
+        if isinstance(row, dict)
+        and not virtual_name.search(str(row.get("name") or ""))
+    ]
+    wireless = [row for row in adapters if row.get("wireless")]
+    unbound = [row for row in adapters if not row.get("driver")]
+    if not adapters:
+        return (_check(
+            "network", "Network", "attention",
+            "No Ethernet or Wi-Fi adapter was detected.",
+            "local network link probe", "drivers", "Open Drivers",
+        ), 0, 0)
+    if unbound:
+        return (_check(
+            "network", "Network", "attention",
+            f"{len(unbound)} of {len(adapters)} network adapter(s) have no driver bound.",
+            "local network link probe", "drivers", "Open Drivers",
+        ), len(adapters), len(wireless))
+    if any(str(row.get("state") or "").upper() == "UP" for row in adapters):
+        return (_check(
+            "network", "Network", "ready",
+            f"{len(adapters)} network adapter(s) detected and a link is active.",
+            "local network link probe",
+        ), len(adapters), len(wireless))
+    return (_check(
+        "network", "Network", "note",
+        f"{len(adapters)} network adapter(s) have drivers; no active link was found.",
+        "local network link probe", "drivers", "Open network devices",
+    ), len(adapters), len(wireless))
+
+
+def _audio_check(facts: dict, probes: dict) -> tuple[dict, int]:
+    data, note = _section(facts, "devices")
+    if data is None:
+        return (_check("audio", "Audio", "unknown",
+                       "Audio hardware could not be verified.",
+                       "local PCI and sound-session probes"), 0)
+    rows = data.get("devices") if isinstance(data.get("devices"), list) else []
+    audio = [row for row in rows if isinstance(row, dict)
+             and re.search(r"audio|multimedia", str(row.get("class") or ""), re.I)]
+    unbound = [row for row in audio if not row.get("driver")]
+    if unbound:
+        return (_check(
+            "audio", "Audio", "attention",
+            f"{len(unbound)} audio device(s) have no kernel driver bound.",
+            "local PCI and sound-session probes", "drivers", "Open Drivers",
+        ), len(audio))
+    if audio and probes.get("audio_session") == "ready":
+        return (_check(
+            "audio", "Audio", "ready",
+            f"{len(audio)} audio device(s) and the desktop sound service are available.",
+            "local PCI and sound-session probes",
+        ), len(audio))
+    if audio:
+        return (_check(
+            "audio", "Audio", "note",
+            f"{len(audio)} audio device(s) have drivers; the desktop sound service was not verified.",
+            "local PCI and sound-session probes",
+        ), len(audio))
+    return (_check("audio", "Audio", "not-present",
+                   "No built-in audio device was detected.",
+                   "local PCI and sound-session probes"), 0)
+
+
+def _firmware_check(facts: dict) -> dict:
+    firmware, note = _section(facts, "firmware")
+    devices, device_note = _section(facts, "devices")
+    if firmware is None and devices is None:
+        return _check("firmware", "Drivers and firmware", "unknown",
+                      "Kernel driver and firmware warnings could not be read.",
+                      "local kernel and PCI probes")
+    missing = int((firmware or {}).get("missing_count") or 0)
+    unbound = int((devices or {}).get("unbound_count") or 0)
+    if missing or unbound:
+        parts = []
+        if missing:
+            parts.append(f"{missing} missing firmware request(s)")
+        if unbound:
+            parts.append(f"{unbound} important device(s) without a bound driver")
+        return _check(
+            "firmware", "Drivers and firmware", "attention",
+            "Detected " + " and ".join(parts) + ".",
+            "local kernel log and PCI driver probes", "drivers", "Review hardware",
+        )
+    if firmware is None or devices is None:
+        return _check(
+            "firmware", "Drivers and firmware", "note",
+            "No problem was found, but one of the local checks was unavailable.",
+            "local kernel log and PCI driver probes", "drivers", "Review hardware",
+        )
+    return _check("firmware", "Drivers and firmware", "ready",
+                  "No missing firmware or important unbound device was found.",
+                  "local kernel log and PCI driver probes")
+
+
+def _memory_check(facts: dict) -> tuple[dict, float | None]:
+    data, note = _section(facts, "memory")
+    if data is None:
+        return (_check("memory", "Memory", "unknown",
+                       "Installed memory could not be measured.",
+                       "local memory probe"), None)
+    try:
+        total = float(data.get("total_gib"))
+    except (TypeError, ValueError):
+        total = 0.0
+    if total < 4:
+        status, summary = "attention", f"{total:g} GiB RAM detected; 4 GiB is the minimum target."
+    elif total < 8:
+        status, summary = "note", f"{total:g} GiB RAM detected; the desktop will run, with limited local AI capacity."
+    else:
+        status, summary = "ready", f"{total:g} GiB RAM detected."
+    return _check("memory", "Memory", status, summary, "local memory probe"), total
+
+
+def _boot_check(probes: dict) -> dict:
+    secure_boot = str(probes.get("secure_boot") or "unknown")
+    uefi = bool(probes.get("uefi"))
+    if secure_boot == "enabled":
+        return _check(
+            "boot", "Boot compatibility", "attention",
+            "Secure Boot is enabled, but the current Shadowfetch boot chain is not signed.",
+            "local firmware-state probe",
+        )
+    if uefi and secure_boot == "disabled":
+        return _check("boot", "Boot compatibility", "ready",
+                      "UEFI is active and Secure Boot is disabled.",
+                      "local firmware-state probe")
+    if not uefi and secure_boot == "not-available":
+        return _check("boot", "Boot compatibility", "ready",
+                      "Legacy BIOS mode is active and supported.",
+                      "local firmware-state probe")
+    if not uefi:
+        return _check("boot", "Boot compatibility", "note",
+                      "Legacy BIOS mode appears active; BIOS installation is supported.",
+                      "local firmware-state probe")
+    return _check("boot", "Boot compatibility", "unknown",
+                  "UEFI is active, but Secure Boot state could not be verified.",
+                  "local firmware-state probe")
+
+
+def _storage_check(facts: dict, probes: dict, live: bool) -> dict:
+    data, note = _section(facts, "storage")
+    if live:
+        size = probes.get("largest_disk_gib")
+        count = int(probes.get("disk_count") or 0)
+        if not size:
+            return _check("storage", "Install storage", "unknown",
+                          "No non-removable installation disk was verified.",
+                          "local block-device size probe")
+        if size < 40:
+            status = "attention"
+            summary = f"{count} installation disk(s) detected; the largest is {size:g} GiB."
+        elif size < 100:
+            status = "note"
+            summary = f"{count} installation disk(s) detected; the largest is {size:g} GiB."
+        else:
+            status = "ready"
+            summary = f"{count} installation disk(s) detected; the largest is {size:g} GiB."
+        return _check("storage", "Install storage", status, summary,
+                      "local block-device size probe")
+    if data is None:
+        return _check("storage", "Storage", "unknown",
+                      "Root filesystem capacity could not be measured.",
+                      "local filesystem probe")
+    try:
+        free = float(data.get("root_free_gib"))
+    except (TypeError, ValueError):
+        free = 0.0
+    if free < 8:
+        status = "attention"
+    elif free < 20:
+        status = "note"
+    else:
+        status = "ready"
+    return _check("storage", "Storage", status,
+                  f"{free:g} GiB is free on the installed system.",
+                  "local filesystem probe", "software", "Open Software and Updates")
+
+
+def _recovery_check(facts: dict, live: bool) -> dict:
+    data, note = _section(facts, "storage")
+    if live:
+        return _check(
+            "recovery", "Recovery", "not-present",
+            "Phoenix protection becomes available after a Btrfs installation.",
+            "local session and filesystem probes",
+        )
+    if data is None:
+        return _check("recovery", "Recovery", "unknown",
+                      "Recovery readiness could not be verified.",
+                      "local filesystem probe", "recover", "Open Recover")
+    if data.get("btrfs_root") and data.get("snapper_present"):
+        return _check("recovery", "Recovery", "ready",
+                      "Btrfs and Phoenix snapshot tooling are available.",
+                      "local filesystem and executable probes")
+    if data.get("btrfs_root"):
+        return _check(
+            "recovery", "Recovery", "attention",
+            "The system uses Btrfs, but snapshot tooling was not found.",
+            "local filesystem and executable probes", "recover", "Open Recover",
+        )
+    return _check(
+        "recovery", "Recovery", "note",
+        "This installation does not use Btrfs, so Phoenix rollback is limited.",
+        "local filesystem probe", "recover", "Open Recover",
+    )
+
+
+def _packages_check(facts: dict, live: bool) -> dict:
+    if live:
+        return _check("packages", "Installed system", "not-present",
+                      "Package health will be checked after installation.",
+                      "local session probe")
+    data, note = _section(facts, "packages")
+    services, services_note = _section(facts, "services")
+    if data is None and services is None:
+        return _check("packages", "System health", "unknown",
+                      "Package and service health could not be verified.",
+                      "local package and service probes")
+    inconsistent = data is not None and not data.get("dpkg_consistent", False)
+    failed = int((services or {}).get("failed_count") or 0)
+    if inconsistent or failed:
+        parts = []
+        if inconsistent:
+            parts.append("the package database needs repair")
+        if failed:
+            parts.append(f"{failed} system service(s) failed")
+        return _check(
+            "packages", "System health", "attention",
+            "Detected " + " and ".join(parts) + ".",
+            "local package and service probes", "software", "Open Software and Updates",
+        )
+    if data is None or services is None:
+        return _check("packages", "System health", "note",
+                      "No problem was found, but one health source was unavailable.",
+                      "local package and service probes")
+    return _check("packages", "System health", "ready",
+                  "The package database is consistent and no failed service was reported.",
+                  "local package and service probes")
+
+
+def _local_ai_check(hwscan: dict | None) -> dict:
+    if not isinstance(hwscan, dict):
+        return _check("local-ai", "Local AI", "unknown",
+                      "Local AI capacity could not be ranked.",
+                      "local Shadowfetch hardware scan", "local-ai", "Open Local AI")
+    verdict = hwscan.get("verdict") if isinstance(hwscan.get("verdict"), dict) else {}
+    sentence = str(verdict.get("sentence") or "").strip()
+    suffixes = verdict.get("suffixes") if isinstance(verdict.get("suffixes"), list) else []
+    missing_driver = any(
+        isinstance(gpu, dict) and "missing-driver" in (gpu.get("flags") or [])
+        for gpu in (hwscan.get("gpus") or [])
+    )
+    if not sentence:
+        return _check("local-ai", "Local AI", "unknown",
+                      "Local AI capacity could not be ranked.",
+                      "local Shadowfetch hardware scan", "local-ai", "Open Local AI")
+    summary = sentence
+    if suffixes:
+        if summary[-1] not in ".!?":
+            summary += "."
+        formatted_suffixes = []
+        for item in suffixes[:3]:
+            suffix = str(item).strip()
+            if not suffix:
+                continue
+            suffix = suffix[:1].upper() + suffix[1:]
+            if suffix[-1] not in ".!?":
+                suffix += "."
+            formatted_suffixes.append(suffix)
+        if formatted_suffixes:
+            summary += " " + " ".join(formatted_suffixes)
+    status = "attention" if missing_driver else "ready"
+    return _check("local-ai", "Local AI", status, summary[:420],
+                  "local Shadowfetch hardware scan", "local-ai", "Open Local AI")
+
+
+def privacy_issues(document: object) -> list[str]:
+    issues: list[str] = []
+
+    def walk(value: object, trail: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                normalized = str(key).strip().lower()
+                if normalized in FORBIDDEN_KEYS:
+                    issues.append(f"forbidden field at {trail}.{key}")
+                walk(child, f"{trail}.{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                walk(child, f"{trail}[{index}]")
+        elif isinstance(value, str):
+            if MAC_RE.search(value):
+                issues.append(f"network hardware identifier at {trail}")
+            if IPV4_RE.search(value):
+                issues.append(f"network address at {trail}")
+            if UUID_RE.search(value):
+                issues.append(f"filesystem identifier at {trail}")
+            if "/home/" in value or "/Users/" in value:
+                issues.append(f"account directory at {trail}")
+
+    walk(document, "passport")
+    return sorted(set(issues))
+
+
+def build_passport(facts: dict, hwscan: dict | None, probes: dict,
+                   release_version: str = "unknown",
+                   generated_at: str | None = None) -> dict:
+    system, note = _section(facts, "system")
+    live = bool(probes.get("live_session"))
+    if system and system.get("container"):
+        mode = "container"
+    else:
+        mode = "live" if live else "installed"
+
+    memory, ram_gib = _memory_check(facts)
+    network, adapter_count, wireless_count = _network_check(facts)
+    audio, audio_count = _audio_check(facts, probes)
+    checks = [
+        _boot_check(probes),
+        _graphics_check(facts),
+        network,
+        audio,
+        _firmware_check(facts),
+        memory,
+        _storage_check(facts, probes, live),
+        _recovery_check(facts, live),
+        _packages_check(facts, live),
+        _local_ai_check(hwscan),
+    ]
+
+    statuses = [item["status"] for item in checks]
+    if "attention" in statuses:
+        overall = "needs-attention"
+        title = "A few things need attention"
+        summary = "Review the highlighted checks before relying on this setup."
+    elif "note" in statuses:
+        overall = "ready-with-notes"
+        title = "Ready, with a few notes"
+        summary = "Core hardware looks usable; review the notes for the best experience."
+    elif all(status in ("unknown", "not-present") for status in statuses):
+        overall = "unknown"
+        title = "Not enough information yet"
+        summary = "The local checks could not verify this computer."
+    else:
+        overall = "ready"
+        title = "This computer is ready"
+        summary = "The checked hardware and system services are ready for Shadowfetch Linux."
+
+    context = {
+        "mode": mode,
+        "operating_system": str((system or {}).get("os_name") or "unknown")[:120],
+        "kernel": str((system or {}).get("kernel") or "unknown")[:80],
+        "architecture": str((system or {}).get("arch") or "unknown")[:40],
+        "virtualization": str((system or {}).get("virtualisation") or "none")[:60],
+        "uefi": bool(probes.get("uefi")),
+        "secure_boot": str(probes.get("secure_boot") or "unknown"),
+    }
+    capabilities = {
+        "ram_gib": ram_gib,
+        "network_adapter_count": adapter_count,
+        "wireless_adapter_count": wireless_count,
+        "audio_device_count": audio_count,
+        "camera_count": int(probes.get("camera_count") or 0),
+        "bluetooth_controller_count": int(probes.get("bluetooth_count") or 0),
+    }
+    document = {
+        "schema_version": SCHEMA_VERSION,
+        "passport_version": PASSPORT_VERSION,
+        "product": "Shadowfetch Guide",
+        "release_version": release_version,
+        "generated_at": generated_at
+        or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "privacy": {
+            "local_only": True,
+            "upload_performed": False,
+            "allowlist_built": True,
+            "omitted": [
+                "host identity", "account names", "network identifiers",
+                "hardware serials", "filesystem identifiers",
+            ],
+        },
+        "context": context,
+        "verdict": {
+            "status": overall,
+            "title": title,
+            "summary": summary,
+            "attention_count": statuses.count("attention"),
+            "note_count": statuses.count("note"),
+            "unknown_count": statuses.count("unknown"),
+        },
+        "capabilities": capabilities,
+        "checks": checks,
+    }
+    issues = privacy_issues(document)
+    if issues:
+        raise ValueError("privacy check failed: " + "; ".join(issues))
+    return document
+
+
+def human_report(document: dict) -> str:
+    verdict = document["verdict"]
+    lines = [
+        f"Shadowfetch System Passport {document['passport_version']}",
+        f"Shadowfetch Linux {document['release_version']} | {document['generated_at']}",
+        "",
+        verdict["title"],
+        verdict["summary"],
+        "",
+    ]
+    for item in document["checks"]:
+        lines.append(f"[{item['status_label']}] {item['label']}")
+        lines.append(f"  {item['summary']}")
+        lines.append(f"  Source: {item['source']}")
+    lines.extend([
+        "",
+        "Privacy: generated locally; no upload performed. Host, account,",
+        "network, serial, and filesystem identifiers are omitted.",
+    ])
+    return "\n".join(lines)
+
+
+def html_report(document: dict) -> str:
+    verdict = document["verdict"]
+    cards = []
+    for item in document["checks"]:
+        cards.append(
+            '<section class="check %s"><div class="row"><h2>%s</h2>'
+            '<span>%s</span></div><p>%s</p><small>Source: %s</small></section>' % (
+                html.escape(item["status"]), html.escape(item["label"]),
+                html.escape(item["status_label"]), html.escape(item["summary"]),
+                html.escape(item["source"]),
+            )
+        )
+    return """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shadowfetch System Passport</title>
+<style>
+body{margin:0;background:#0b0e12;color:#e6e9ed;font:16px system-ui,sans-serif}
+main{max-width:920px;margin:auto;padding:48px 24px 64px}h1{font-size:36px;margin:8px 0}
+.eyebrow{color:#d8a24a;font-weight:700}.hero{border-bottom:1px solid #2c333b;padding-bottom:28px}
+.verdict{font-size:21px}.check{background:#141922;border:1px solid #2c333b;border-radius:8px;
+padding:18px;margin:12px 0}.row{display:flex;gap:16px;align-items:center;justify-content:space-between}
+h2{font-size:18px;margin:0}.row span{font-weight:700}.ready .row span{color:#7fb069}
+.attention .row span{color:#e2533b}.note .row span{color:#d8a24a}
+.unknown .row span,.not-present .row span,small{color:#9aa3ad}p{line-height:1.5}
+.privacy{margin-top:28px;padding-top:20px;border-top:1px solid #2c333b;color:#9aa3ad}
+</style></head><body><main><header class="hero"><div class="eyebrow">SHADOWFETCH GUIDE</div>
+<h1>System Passport</h1><p class="verdict"><strong>%s</strong><br>%s</p>
+<small>Shadowfetch Linux %s | %s</small></header>%s
+<p class="privacy">Generated locally. No upload was performed. Host, account, network,
+serial, and filesystem identifiers are omitted.</p></main></body></html>
+""" % (
+        html.escape(verdict["title"]), html.escape(verdict["summary"]),
+        html.escape(str(document["release_version"])),
+        html.escape(document["generated_at"]), "".join(cards),
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="shadowfetch-passport",
+        description=(
+            "Generate a private, read-only System Passport. No data is uploaded "
+            "and no system changes are made."
+        ),
+    )
+    formats = parser.add_mutually_exclusive_group()
+    formats.add_argument("--json", action="store_true", help="emit structured JSON")
+    formats.add_argument("--html", action="store_true", help="emit a standalone HTML report")
+    parser.add_argument("--output", metavar="FILE",
+                        help="write the selected report to FILE instead of stdout")
+    parser.add_argument("--version", action="version",
+                        version=f"shadowfetch-passport (Shadowfetch Linux) {PASSPORT_VERSION}")
+    args = parser.parse_args(argv)
+
+    facts, hwscan, probes = collect_inputs()
+    document = build_passport(facts, hwscan, probes, _release_version())
+    if args.json:
+        output = json.dumps(document, indent=2) + "\n"
+    elif args.html:
+        output = html_report(document)
+    else:
+        output = human_report(document) + "\n"
+
+    if args.output:
+        destination = Path(args.output).expanduser()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(output, encoding="utf-8")
+    else:
+        print(output, end="")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        raise SystemExit(130)

@@ -99,12 +99,16 @@ fun hide_password_dialogue() {
     }
 }
 
-fun display_password_callback(prompt, bullets) {
+fun show_password_dialogue() {
     password.active = 1;
     spinner.active = 0;
     set_spinner_opacity(0);
     password.title.sprite.SetOpacity(1);
     password.hint.sprite.SetOpacity(1);
+}
+
+fun display_password_callback(prompt, bullets) {
+    show_password_dialogue();
 
     if (bullets > password.max_bullets) bullets = password.max_bullets;
     bullets_width = bullets * password.dot_size;
@@ -127,6 +131,15 @@ fun display_password_callback(prompt, bullets) {
     }
 }
 
+# Plymouth 24 also emits the generic prompt callback after password requests.
+# Keeping this fallback visible avoids a blank unlock screen during early-boot
+# display timing changes while the password callback retains bullet rendering.
+fun display_prompt_callback(prompt, entry_text, is_secret) {
+    if (is_secret) {
+        show_password_dialogue();
+    }
+}
+
 fun display_normal_callback() {
     password.active = 0;
     hide_password_dialogue();
@@ -135,6 +148,7 @@ fun display_normal_callback() {
 }
 
 Plymouth.SetDisplayPasswordFunction(display_password_callback);
+Plymouth.SetDisplayPromptFunction(display_prompt_callback);
 Plymouth.SetDisplayNormalFunction(display_normal_callback);
 
 # Routine status payloads are intentionally not rendered on the branded splash.

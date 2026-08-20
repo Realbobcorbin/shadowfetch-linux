@@ -1,4 +1,4 @@
-# Buzz on Shadowfetch Linux 2.1.4 Fire Edition
+# Buzz on Shadowfetch Linux 2.1.5 Fire Edition
 
 Shadowfetch offers [Buzz](https://github.com/block/buzz) as the shared workspace
 for people and AI agents. Buzz is optional. The first-run wizard can install the
@@ -11,7 +11,7 @@ Open **Buzz** from the **Local AI** menu, or run:
 
     shadowfetch-buzz setup
 
-The setup downloads Buzz Desktop 0.5.8 from Block's official GitHub release and
+The setup downloads Buzz Desktop 0.5.17 from Block's official GitHub release and
 verifies its SHA-256 before installation. It then starts Buzz Relay 0.2.1 in
 rootless Podman, bound to `127.0.0.1:3000`. PostgreSQL, Redis, MinIO, relay data,
 and generated secrets remain inside the user's local container storage. Relay

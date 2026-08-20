@@ -1,6 +1,6 @@
 [Unit]
 Description=Shadowfetch hardware and AI capability scan
-Documentation=https://shadowfetch.com/linux/
+Documentation=https://www.shadowfetchlinux.org/
 # One scan per boot, written to /var/lib/shadowfetch/hwscan.json
 # (world-readable). UI surfaces (Ignition, Welcome, Control Center
 # Agents/Drivers) read the file when it is from the current boot and

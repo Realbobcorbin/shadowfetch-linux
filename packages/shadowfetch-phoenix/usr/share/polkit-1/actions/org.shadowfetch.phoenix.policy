@@ -4,7 +4,7 @@
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
 <policyconfig>
   <vendor>Shadowfetch Project</vendor>
-  <vendor_url>https://shadowfetch.com/linux/</vendor_url>
+  <vendor_url>https://www.shadowfetchlinux.org/</vendor_url>
 
   <!-- Restoring a Point swaps the system root subvolume: a real system
        mutation, so it always authenticates as admin. auth_admin_keep lets

@@ -1,6 +1,6 @@
 [Unit]
 Description=Shadowfetch Fireproof first-boot-after-update check
-Documentation=https://shadowfetch.com/linux/
+Documentation=https://www.shadowfetchlinux.org/
 # Ordered after graphical.target for the normal path; fireproof-postboot.timer
 # is the 120 s fallback for boots that never reach it. The script itself
 # waits for a real session, so an early start is harmless.

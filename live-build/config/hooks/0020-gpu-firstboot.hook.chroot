@@ -55,7 +55,7 @@ chmod 0755 /usr/local/sbin/shadowfetch-gpu-detect
 cat > /etc/systemd/system/shadowfetch-gpu-detect.service <<'EOF'
 [Unit]
 Description=Measure Shadowfetch graphics driver readiness
-Documentation=https://www.shadowfetch.com/linux
+Documentation=https://www.shadowfetchlinux.org/
 ConditionPathExists=!/run/live/medium
 ConditionPathExists=!/run/live/rootfs
 After=systemd-udev-settle.service display-manager.service

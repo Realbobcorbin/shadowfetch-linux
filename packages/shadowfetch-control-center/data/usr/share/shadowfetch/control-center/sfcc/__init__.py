@@ -4,7 +4,7 @@ The Control Center executable at /usr/bin/shadowfetch-control is a thin
 front door: it answers --help/--version before any Qt import, handles the
 terminal fallback, then hands over to sfcc.app.run().  Everything visual
 lives here, one module per sidebar section, all drawing from sfcc.theme so
-the six sections read as one application.
+the seven sections read as one application.
 
 Nothing in this package talks to the network.  Every number shown in the
 UI comes from a local D-Bus service (org.shadowfetch.Firewatch1,

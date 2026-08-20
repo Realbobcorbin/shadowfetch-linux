@@ -2,9 +2,9 @@
 # Privileged, fixed-input installer for the official Buzz Desktop package.
 set -euo pipefail
 
-BUZZ_VERSION="0.5.8"
+BUZZ_VERSION="0.5.17"
 BUZZ_DEB_URL="https://github.com/block/buzz/releases/download/desktop-v${BUZZ_VERSION}/Buzz_${BUZZ_VERSION}_amd64.deb"
-BUZZ_DEB_SHA256="ca67a81c2c75e908b38039a6571cf87aa38112a0ef06881fc50049a8b0b58c67"
+BUZZ_DEB_SHA256="cf28de6ba023fdb6eb676f183579e1df4d83bc29b4ebfa6c26ad8e3f327e0fef"
 
 usage() {
     cat <<'EOF'
@@ -29,7 +29,7 @@ if (( EUID != 0 )); then
     exit 1
 fi
 if [[ $(uname -m) != "x86_64" ]]; then
-    echo "Shadowfetch Fire Edition 2.1.4 supports x86_64 systems only." >&2
+    echo "Shadowfetch Fire Edition 2.1.5 supports x86_64 systems only." >&2
     exit 3
 fi
 for command in apt-get curl dpkg dpkg-query flock sha256sum; do

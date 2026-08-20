@@ -1,3 +1,16 @@
+shadowfetch-welcome (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild the first-run Fire Edition workflow for 2.1.5.
+  * Keep Buzz optional and leave model recommendation and consented download in
+    Buzz's native Compute settings.
+  * Offer Codex, Claude Code, Grok Build, and Cursor Agent together as separate,
+    unchecked first-run options with independent verification, cancellation,
+    retry, receipts, and authentic sign-in handoff.
+  * Offer Check this computer from both Ignition and Welcome, opening the
+    private, read-only Shadowfetch System Passport before or after installation.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-welcome (2.1.4-1) umbra; urgency=high
 
   * Replace the duplicate local-AI and agent screens with one opt-in Buzz flow.

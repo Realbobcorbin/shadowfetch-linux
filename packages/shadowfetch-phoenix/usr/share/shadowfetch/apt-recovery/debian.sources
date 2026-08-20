@@ -1,2 +1,7 @@
+# Shadowfetch Linux -- Debian testing.
+# Written at install time from the suite this image was built against, so it
+# cannot disagree with the installed userland. See https://wiki.debian.org/SourcesList
 deb http://deb.debian.org/debian/ testing main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian/ testing main contrib non-free non-free-firmware
 deb http://deb.debian.org/debian/ testing-updates main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian/ testing-updates main contrib non-free non-free-firmware

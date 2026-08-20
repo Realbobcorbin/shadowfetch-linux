@@ -1,3 +1,10 @@
+shadowfetch-fireproof (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild Fireproof update analysis for the 2.1.5 Fire Edition.
+  * Preserve simulate-first, no-unverified-removal upgrade behavior.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-fireproof (2.1.4-1) umbra; urgency=medium
 
   * Rebuild Fireproof update analysis for the 2.1.4 Fire Edition.

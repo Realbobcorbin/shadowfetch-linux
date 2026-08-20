@@ -1,4 +1,4 @@
-# Fire Edition 2.1.4 local AI and rootless Buzz relay prerequisites.
+# Fire Edition 2.1.5 local AI and rootless Buzz relay prerequisites.
 podman
 podman-compose
 uidmap

@@ -1,6 +1,6 @@
 [Unit]
 Description=Shadowfetch Ember Mode (one switch; always returns to Balanced)
-Documentation=https://shadowfetch.com/linux/
+Documentation=https://www.shadowfetchlinux.org/
 # Started and stopped on demand from the Control Center Ember switch (the
 # polkit rule lets the active console user do that without a password).
 # Never enabled, never autostarted: Ember is a switch, not a state.

@@ -1,6 +1,6 @@
 [Unit]
 Description=Shadowfetch Fireproof update daemon
-Documentation=https://shadowfetch.com/linux/
+Documentation=https://www.shadowfetchlinux.org/
 # Analyze is side-effect free; the dpkg frontend lock is taken only at
 # commit. The daemon is D-Bus activated (org.shadowfetch.Fireproof1) and
 # has no [Install] section on purpose: it starts when a client asks.

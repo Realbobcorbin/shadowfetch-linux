@@ -22,7 +22,7 @@ House rules:
     read-only probes; failure or overrun means "unknown", never an
     error.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/
 """
 
 import argparse
@@ -33,6 +33,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 SCHEMA = 1
@@ -220,8 +221,28 @@ def run_boxed(argv, timeout_s=TIMEOUT_S):
     if shutil.which(argv[0]) is None:
         return None
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True,
-                              timeout=timeout_s)
+        if os.path.basename(argv[0]) == "vulkaninfo" and "--json" in argv:
+            # Newer vulkaninfo releases write --json to a generated file even
+            # without --output. Isolate that side effect so a Guide scan never
+            # leaves a hardware-profile file in the caller's directory.
+            with tempfile.TemporaryDirectory(
+                    prefix="shadowfetch-vulkaninfo-") as workdir:
+                proc = subprocess.run(
+                    argv, capture_output=True, text=True,
+                    timeout=timeout_s, cwd=workdir,
+                )
+                if proc.returncode != 0:
+                    return None
+                if proc.stdout.strip():
+                    return proc.stdout
+                profiles = sorted(glob.glob(os.path.join(
+                    workdir, "VP_VULKANINFO_*.json")))
+                if not profiles:
+                    return None
+                return _read(profiles[0], default=None)
+        proc = subprocess.run(
+            argv, capture_output=True, text=True, timeout=timeout_s,
+        )
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return None
     if proc.returncode != 0:

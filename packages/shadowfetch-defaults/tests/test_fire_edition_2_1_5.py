@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Focused release gates for the 2.1.4 Buzz and graphics transition."""
+"""Focused release gates for the Shadowfetch Linux 2.1.5 maintenance release."""
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
 import json
 import os
 import py_compile
@@ -20,8 +22,11 @@ ROOT = Path(__file__).resolve().parents[3]
 DEFAULTS = ROOT / "packages" / "shadowfetch-defaults"
 WELCOME = ROOT / "packages" / "shadowfetch-welcome" / "src" / "shadowfetch-welcome"
 CONTROL = ROOT / "packages" / "shadowfetch-control-center" / "data"
+PASSPORT = DEFAULTS / "data/usr/bin/shadowfetch-passport"
 PROVISION = DEFAULTS / "data/usr/libexec/shadowfetch-buzz-provision"
 BUZZ = DEFAULTS / "data/usr/bin/shadowfetch-buzz"
+CODEX = DEFAULTS / "data/usr/bin/shadowfetch-codex"
+CODE_AGENTS = DEFAULTS / "data/usr/bin/shadowfetch-code-agent"
 BUZZ_BOOTSTRAP = DEFAULTS / "data/usr/libexec/shadowfetch-buzz-bootstrap"
 BUZZ_STACK = DEFAULTS / "data/usr/libexec/shadowfetch-buzz-stack"
 BUZZ_COMPOSE = DEFAULTS / "data/usr/share/shadowfetch/buzz/compose.yml"
@@ -34,15 +39,58 @@ PLYMOUTH = (
     / "packages/shadowfetch-branding/data/usr/share/plymouth/themes/"
     "shadowfetch/shadowfetch.script"
 )
+PHOENIX_RESTORE = (
+    ROOT / "packages/shadowfetch-phoenix/usr/libexec/phoenix-restore"
+)
 
 
-class FireEdition214Tests(unittest.TestCase):
+class FireEdition215Tests(unittest.TestCase):
+    def test_phoenix_atomic_exchange_treats_root_as_a_path(self):
+        restore = PHOENIX_RESTORE.read_text()
+        self.assertIn(
+            'mv --exchange --no-target-directory "$MNT/@new" "$MNT/@"',
+            restore,
+        )
+        self.assertNotIn('mv --exchange "$MNT/@new" "$MNT/@"', restore)
+        self.assertIn('grub-reboot "$submenu_id>$entry_id"', restore)
+        self.assertIn('BOOT_ARCHIVE="/boot/phoenix-kernel-backup-$TS"', restore)
+        self.assertIn('update-grub >/dev/null 2>&1', restore)
+        self.assertIn('rollback_external_boot', restore)
+
     def test_release_version_and_package_versions_match(self):
         makefile = (ROOT / "Makefile").read_text()
-        self.assertRegex(makefile, r"(?m)^VERSION\s+\?= 2\.1\.4$")
+        self.assertRegex(makefile, r"(?m)^VERSION\s+\?= 2\.1\.5$")
         for changelog in (ROOT / "packages").glob("shadowfetch-*/debian/changelog"):
             first = changelog.read_text().splitlines()[0]
-            self.assertIn("(2.1.4-1)", first, changelog)
+            self.assertIn("(2.1.5-1)", first, changelog)
+
+    def test_canonical_identity_keeps_verified_raw_artifact_routes(self):
+        canonical = "https://www.shadowfetchlinux.org"
+        repository = "https://github.com/ShadowfetchLinux/shadowfetch-linux"
+        artifact_base = "https://www.shadowfetch.com/linux"
+        os_release = (
+            ROOT
+            / "packages/shadowfetch-branding/data/usr/share/shadowfetch/"
+            "os-release.shadowfetch"
+        ).read_text()
+        self.assertIn(f'HOME_URL="{canonical}/"', os_release)
+        self.assertIn(f'BUG_REPORT_URL="{repository}/issues"', os_release)
+
+        makefile = (ROOT / "Makefile").read_text()
+        self.assertIn(f"PUBLIC_SITE ?= {canonical}", makefile)
+        self.assertIn(f"ARTIFACT_BASE ?= {artifact_base}", makefile)
+
+        apt_sources = (
+            ROOT / "live-build/config/archives/shadowfetch.list.binary",
+            ROOT / "live-build/config/hooks/0099-apt-source.hook.chroot",
+            ROOT
+            / "packages/shadowfetch-phoenix/usr/share/shadowfetch/apt-recovery/"
+            "umbra.sources",
+        )
+        for source in apt_sources:
+            content = source.read_text()
+            self.assertIn(f"{artifact_base}/apt", content, source)
+            self.assertNotIn(f"{canonical}/apt", content, source)
 
     def test_debian_revision_versions_use_quilt_source_format(self):
         formats = sorted((ROOT / "packages").glob("*/debian/source/format"))
@@ -151,7 +199,10 @@ class FireEdition214Tests(unittest.TestCase):
         self.assertIn("sha256sum --check", iso)
         self.assertIn("--verify $(ROOT)/$(ISO_NAME).asc", makefile)
         self.assertIn("@$(MAKE) iso-gate", iso)
-        self.assertIn("tools/iso_gate_2_1_4.py", makefile)
+        self.assertIn(
+            "ISO_GATE := $(ROOT)/tools/iso_gate_$(VERSION_TOKEN).py",
+            makefile,
+        )
         self.assertIn("ISO_GATE_LOG", makefile)
 
     def test_first_boot_uses_utc_rtc_and_network_time(self):
@@ -175,6 +226,8 @@ class FireEdition214Tests(unittest.TestCase):
         self.assertIn("UNLOCK ENCRYPTED DRIVE", script)
         self.assertIn("Enter your disk passphrase, then press Enter", script)
         self.assertIn("Plymouth.SetDisplayPasswordFunction", script)
+        self.assertIn("Plymouth.SetDisplayPromptFunction", script)
+        self.assertIn("if (is_secret)", script)
         self.assertIn("Plymouth.SetDisplayNormalFunction", script)
         self.assertIn('Image("dot-gold.png").Scale', script)
         self.assertNotIn("Plymouth.GetTime", script)
@@ -206,11 +259,11 @@ class FireEdition214Tests(unittest.TestCase):
         )
 
     def test_buzz_upstream_contract_is_locked(self):
-        lock = json.loads((ROOT / "qa/2.1.4/upstream-buzz.json").read_text())
-        self.assertEqual("desktop-v0.5.8", lock["tag"])
+        lock = json.loads((ROOT / "qa/2.1.5/upstream-buzz.json").read_text())
+        self.assertEqual("desktop-v0.5.17", lock["tag"])
         self.assertRegex(lock["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual("buzz", lock["debian_contract"]["package"])
-        self.assertEqual("0.5.8", lock["debian_contract"]["version"])
+        self.assertEqual("0.5.17", lock["debian_contract"]["version"])
         self.assertEqual("amd64", lock["debian_contract"]["architecture"])
         self.assertIn("mesh-llm", lock["release_build"]["linux_features"])
         self.assertEqual("0.2.1", lock["relay"]["tag"])
@@ -220,8 +273,134 @@ class FireEdition214Tests(unittest.TestCase):
         for binary in ("/usr/bin/buzz", "/usr/bin/buzz-agent", "/usr/bin/buzz-desktop"):
             self.assertIn(binary, lock["debian_contract"]["required_binaries"])
 
+    def test_codex_upstream_contract_is_locked(self):
+        lock = json.loads((ROOT / "qa/2.1.5/upstream-codex.json").read_text())
+        helper = CODEX.read_text()
+        self.assertEqual("0.148.0", lock["release"])
+        self.assertEqual(
+            "https://learn.chatgpt.com/docs/codex/cli", lock["documentation"]
+        )
+        self.assertEqual(
+            "https://chatgpt.com/codex/install.sh", lock["installer"]["url"]
+        )
+        self.assertRegex(lock["installer"]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual("desktop-user", lock["installation"]["scope"])
+        self.assertFalse(lock["installation"]["credentials_embedded"])
+        self.assertTrue(
+            lock["installation"]["archive_digest_verified_by_upstream_installer"]
+        )
+        self.assertIn(f'CODEX_VERSION="{lock["release"]}"', helper)
+        self.assertIn(f'INSTALLER_URL="{lock["installer"]["url"]}"', helper)
+        self.assertIn(f'INSTALLER_SHA256="{lock["installer"]["sha256"]}"', helper)
+
+    def test_codex_setup_is_opt_in_verified_and_user_owned(self):
+        helper = CODEX.read_text()
+        welcome = WELCOME.read_text()
+        install_manifest = (
+            DEFAULTS / "debian/shadowfetch-defaults.install"
+        ).read_text()
+        self.assertIn('"label": "OpenAI Codex CLI"', welcome)
+        self.assertIn("checkbox.setChecked(False)", welcome)
+        self.assertIn('"codex": coding_agents["codex"]', welcome)
+        self.assertIn('selected_agents = {"codex": bool(local_ai.get("codex"))}', welcome)
+        self.assertIn("Official Codex installer SHA-256 verified", helper)
+        self.assertIn("sha256sum --check --status", helper)
+        self.assertIn("--proto '=https'", helper)
+        self.assertIn("CODEX_NON_INTERACTIVE=true", helper)
+        self.assertIn("CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=true", helper)
+        self.assertIn('if ((EUID == 0))', helper)
+        self.assertIn('BIN_DIR="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"', helper)
+        self.assertIn("No OpenAI credential was stored by Shadowfetch", helper)
+        self.assertNotIn("OPENAI_API_KEY", helper)
+        self.assertNotIn("auth.json", helper)
+        self.assertNotRegex(helper, r"curl[^\n|]*\|\s*(?:ba)?sh\b")
+        self.assertIn("data/usr/bin/shadowfetch-codex", install_manifest)
+        self.assertIn("data/usr/share/doc/shadowfetch/CODEX.md", install_manifest)
+
+        next_body = welcome.split("def _start_next_ai(self):", 1)[1].split(
+            "\n    def ", 1
+        )[0]
+        self.assertLess(
+            next_body.index('self.buzz_state == "pending"'),
+            next_body.index("for agent in CODING_AGENTS"),
+        )
+
+    def test_additional_coding_agents_are_locked_and_user_owned(self):
+        lock = json.loads(
+            (ROOT / "qa/2.1.5/upstream-coding-agents.json").read_text()
+        )
+        helper = CODE_AGENTS.read_text()
+        expected = {
+            "claude": (
+                "2.1.227",
+                "https://downloads.claude.ai/claude-code-releases/2.1.227/linux-x64/claude",
+                "6832dc3f1797b890b71116e5f2dbbf9a83fd3d0498c235b4b0f9cd0e6e499ad6",
+                "claude",
+            ),
+            "grok": (
+                "1.0.5",
+                "https://x.ai/cli/grok-1.0.5-linux-x86_64",
+                "9ba87444e1819e8f6104adbbf4676a870c204380aa5c3e1c38a926c4ea677238",
+                "grok",
+            ),
+            "cursor": (
+                "2026.08.11-e8db854",
+                "https://downloads.cursor.com/lab/2026.08.11-e8db854/linux/x64/agent-cli-package.tar.gz",
+                "bfff4bf6f4e9dd30c1d0ef0a70b6077b074015dd2948e4c50685d53afdcfce5a",
+                "cursor-agent",
+            ),
+        }
+        self.assertEqual("linux-x86_64", lock["platform"])
+        self.assertEqual("desktop-user", lock["installation"]["scope"])
+        self.assertFalse(lock["installation"]["selected_by_default"])
+        self.assertFalse(lock["installation"]["credentials_embedded"])
+        self.assertFalse(lock["installation"]["credentials_copied_by_shadowfetch"])
+        self.assertFalse(lock["installation"]["failure_blocks_base_setup"])
+        for key, (release, url, digest, command) in expected.items():
+            agent = lock["agents"][key]
+            self.assertEqual(release, agent["release"])
+            self.assertEqual(url, agent["artifact"]["url"])
+            self.assertEqual(digest, agent["artifact"]["sha256"])
+            self.assertEqual(command, agent["command"])
+            self.assertIn(f'VERSION="{release}"', helper)
+            self.assertIn(f'ARTIFACT_URL="{url}"', helper)
+            self.assertIn(f'ARTIFACT_SHA256="{digest}"', helper)
+
+    def test_coding_agent_choices_are_grouped_verified_and_independent(self):
+        helper = CODE_AGENTS.read_text()
+        welcome = WELCOME.read_text()
+        install_manifest = (
+            DEFAULTS / "debian/shadowfetch-defaults.install"
+        ).read_text()
+        for label in (
+            "OpenAI Codex CLI",
+            "Anthropic Claude Code",
+            "xAI Grok Build",
+            "Cursor Agent",
+        ):
+            self.assertIn(label, welcome)
+        self.assertIn("Optional coding agents", welcome)
+        self.assertIn("Select all four", welcome)
+        self.assertIn("QGridLayout", welcome)
+        self.assertIn("agent_grid.addWidget(card, index // 2, index % 2)", welcome)
+        self.assertIn("checkbox.setChecked(False)", welcome)
+        self.assertIn('"coding_agents": coding_agents', welcome)
+        self.assertIn("for agent in CODING_AGENTS", welcome)
+        self.assertIn('command.extend(["setup", "--yes", "--no-open"])', welcome)
+        self.assertIn("sha256sum --check --status", helper)
+        self.assertIn("--proto '=https'", helper)
+        self.assertIn('if ((EUID == 0))', helper)
+        self.assertIn('BIN_DIR="${SHADOWFETCH_CODE_AGENT_BIN_DIR:-$HOME/.local/bin}"', helper)
+        self.assertIn("credentials_stored_by_shadowfetch=false", helper)
+        self.assertNotIn("API_KEY", helper)
+        self.assertNotIn("auth.json", helper)
+        self.assertNotRegex(helper, r"curl[^\n|]*\|\s*(?:ba)?sh\b")
+        self.assertNotIn('"$BIN_DIR/agent"', helper)
+        self.assertIn("data/usr/bin/shadowfetch-code-agent", install_manifest)
+        self.assertIn("data/usr/share/doc/shadowfetch/CODING-AGENTS.md", install_manifest)
+
     def test_nvidia_rtx_5080_contract_is_locked(self):
-        lock = json.loads((ROOT / "qa/2.1.4/upstream-nvidia.json").read_text())
+        lock = json.loads((ROOT / "qa/2.1.5/upstream-nvidia.json").read_text())
         self.assertTrue(lock["repository"]["signature_verified"])
         self.assertRegex(lock["repository"]["signing_fingerprint"], r"^[0-9A-F]{40}$")
         self.assertEqual("0x2C02", lock["rtx_5080"]["pci_device_id"])
@@ -276,7 +455,7 @@ class FireEdition214Tests(unittest.TestCase):
     def test_buzz_relay_is_loopback_only_and_image_is_pinned(self):
         compose = BUZZ_COMPOSE.read_text()
         helper = BUZZ.read_text()
-        lock = json.loads((ROOT / "qa/2.1.4/upstream-buzz.json").read_text())
+        lock = json.loads((ROOT / "qa/2.1.5/upstream-buzz.json").read_text())
         self.assertIn('"127.0.0.1:${BUZZ_HTTP_PORT:-3000}:3000"', compose)
         self.assertNotIn('"${BUZZ_HTTP_PORT:-3000}:3000"', compose)
         self.assertRegex(
@@ -303,6 +482,20 @@ class FireEdition214Tests(unittest.TestCase):
         self.assertIn('export BUZZ_RELAY_URL="$RELAY_URL"', helper)
         self.assertNotRegex(helper, r"(?m)^\s*(?:source|\.)\s+.*client\.env")
 
+    def test_buzz_wayland_launch_uses_guarded_webkit_renderer(self):
+        helper = BUZZ.read_text()
+        self.assertIn("prepare_buzz_rendering()", helper)
+        self.assertIn('[[ -n "${WAYLAND_DISPLAY:-}"', helper)
+        self.assertIn('-z "${WEBKIT_DMABUF_RENDERER_FORCE_SHM+x}"', helper)
+        self.assertIn('-z "${WEBKIT_DISABLE_DMABUF_RENDERER+x}"', helper)
+        self.assertIn("export WEBKIT_DMABUF_RENDERER_FORCE_SHM=1", helper)
+        self.assertNotIn("export WEBKIT_DISABLE_DMABUF_RENDERER=1", helper)
+        open_body = helper.split("cmd_open() {", 1)[1].split("\n}", 1)[0]
+        self.assertLess(
+            open_body.index("prepare_buzz_rendering"),
+            open_body.index("exec buzz-desktop"),
+        )
+
     def test_every_container_image_is_immutable(self):
         image_lines = [
             line.strip()
@@ -317,7 +510,7 @@ class FireEdition214Tests(unittest.TestCase):
 
     def test_buzz_package_is_checksum_and_transaction_gated(self):
         provision = PROVISION.read_text()
-        lock = json.loads((ROOT / "qa/2.1.4/upstream-buzz.json").read_text())
+        lock = json.loads((ROOT / "qa/2.1.5/upstream-buzz.json").read_text())
         digest = lock["asset"]["sha256"]
         self.assertIn(f'BUZZ_DEB_SHA256="{digest}"', provision)
         self.assertIn("--proto '=https'", provision)
@@ -358,6 +551,7 @@ class FireEdition214Tests(unittest.TestCase):
             "data/usr/lib/systemd/system/shadowfetch-migrate-2.1.3-ai.service",
             "data/usr/share/shadowfetch/migrations/2.1.3-ai-packages",
             "data/usr/share/doc/shadowfetch/BUZZ.md",
+            "data/usr/bin/shadowfetch-passport",
         ):
             self.assertIn(expected, manifest)
         self.assertNotRegex(
@@ -540,7 +734,7 @@ class FireEdition214Tests(unittest.TestCase):
     def test_buzz_is_the_only_model_owner_in_current_guidance(self):
         welcome = WELCOME.read_text()
         guide = (DEFAULTS / "data/usr/share/doc/shadowfetch/BUZZ.md").read_text()
-        release = (ROOT / "docs/RELEASE-2.1.4.md").read_text()
+        release = (ROOT / "docs/RELEASE-2.1.5.md").read_text()
         for content in (welcome, guide, release, BUZZ.read_text()):
             self.assertIn("Buzz", content)
             self.assertNotRegex(
@@ -562,6 +756,7 @@ class FireEdition214Tests(unittest.TestCase):
             DEFAULTS / "data/usr/bin/shadowfetch-agent-workspace",
             DEFAULTS / "data/usr/bin/shadowfetch-agent-doctor",
             DEFAULTS / "data/usr/bin/shadowfetch-agent-tools",
+            PASSPORT,
             ROOT / "live-build/config/hooks/0020-gpu-firstboot.hook.chroot",
             WELCOME,
         )
@@ -589,6 +784,9 @@ class FireEdition214Tests(unittest.TestCase):
             WELCOME,
             DEFAULTS / "data/usr/bin/shadowfetch-health",
             DEFAULTS / "data/usr/bin/shadowfetch-facts",
+            PASSPORT,
+            CONTROL / "usr/share/shadowfetch/control-center/sfcc/app.py",
+            CONTROL / "usr/share/shadowfetch/control-center/sfcc/guide_page.py",
             CONTROL / "usr/share/shadowfetch/control-center/sfcc/agents_page.py",
             CONTROL / "usr/share/shadowfetch/control-center/sfcc/firewatch_page.py",
         )
@@ -600,6 +798,265 @@ class FireEdition214Tests(unittest.TestCase):
                     doraise=True,
                 )
 
+    @staticmethod
+    def _passport_module(name):
+        loader = importlib.machinery.SourceFileLoader(name, str(PASSPORT))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        return module
+
+    def test_system_passport_is_allowlisted_redacted_and_ready(self):
+        module = self._passport_module("sf_passport_qa")
+
+        def section(data):
+            return {"available": True, "source": "fixture", "data": data}
+
+        facts = {"facts": {
+            "system": section({
+                "hostname": "private-workstation",
+                "os_name": "Shadowfetch Linux",
+                "kernel": "6.12.0",
+                "arch": "x86_64",
+                "virtualisation": "none",
+                "container": False,
+            }),
+            "graphics": section({
+                "cards": [{"name": "Test GPU", "driver": "amdgpu",
+                           "slot": "0000:01:00.0"}],
+                "renderer": "AMD Radeon Test",
+                "accelerated": True,
+                "software_rendering": False,
+            }),
+            "network": section({
+                "interfaces": [{
+                    "name": "wlan0", "state": "UP",
+                    "mac": "aa:bb:cc:dd:ee:ff", "driver": "iwlwifi",
+                    "wireless": True,
+                }],
+                "has_carrier": True,
+            }),
+            "devices": section({
+                "devices": [{
+                    "slot": "0000:00:1f.3", "class": "Audio device",
+                    "name": "Private Audio", "driver": "snd_hda_intel",
+                }],
+                "unbound_count": 0,
+                "unbound_important": [],
+            }),
+            "firmware": section({"missing_count": 0, "missing": []}),
+            "memory": section({"total_gib": 16.0, "available_gib": 12.0}),
+            "storage": section({
+                "root_free_gib": 120.0,
+                "root_used_pct": 20,
+                "btrfs_root": True,
+                "snapper_present": True,
+                "filesystems": [{
+                    "mount": "/", "device": "/dev/nvme0n1p2",
+                }],
+            }),
+            "packages": section({"dpkg_consistent": True}),
+            "services": section({"failed_count": 0, "failed_units": []}),
+        }}
+        hwscan = {
+            "gpus": [{"flags": []}],
+            "verdict": {
+                "sentence": "This machine can run local models.",
+                "suffixes": [],
+            },
+        }
+        probes = {
+            "live_session": False,
+            "camera_count": 1,
+            "bluetooth_count": 1,
+            "audio_session": "ready",
+            "disk_count": 1,
+            "largest_disk_gib": 512.0,
+            "uefi": True,
+            "secure_boot": "disabled",
+        }
+        passport = module.build_passport(
+            facts, hwscan, probes, release_version="2.1.5",
+            generated_at="2026-08-18T00:00:00Z",
+        )
+        encoded = json.dumps(passport)
+        self.assertEqual("ready", passport["verdict"]["status"])
+        self.assertEqual([], module.privacy_issues(passport))
+        for secret in (
+            "private-workstation",
+            "aa:bb:cc:dd:ee:ff",
+            "0000:01:00.0",
+            "0000:00:1f.3",
+            "/dev/nvme0n1p2",
+            "wlan0",
+        ):
+            self.assertNotIn(secret, encoded)
+        self.assertTrue(passport["privacy"]["local_only"])
+        self.assertFalse(passport["privacy"]["upload_performed"])
+        report = module.html_report(passport)
+        self.assertIn("Shadowfetch System Passport", report)
+        self.assertNotIn("private-workstation", report)
+
+    def test_system_passport_escalates_real_compatibility_failures(self):
+        module = self._passport_module("sf_passport_attention_qa")
+        unavailable = {
+            "available": False,
+            "source": "fixture",
+            "note": "missing",
+        }
+        facts = {"facts": {
+            "system": {"available": True, "source": "fixture", "data": {
+                "os_name": "Shadowfetch Linux",
+                "kernel": "6.12.0",
+                "arch": "x86_64",
+                "virtualisation": "none",
+                "container": False,
+            }},
+            "graphics": {"available": True, "source": "fixture", "data": {
+                "cards": [{"name": "GPU", "driver": None}],
+                "renderer": "llvmpipe",
+                "accelerated": False,
+                "software_rendering": True,
+            }},
+            "network": {"available": True, "source": "fixture", "data": {
+                "interfaces": [],
+                "has_carrier": False,
+            }},
+            "devices": unavailable,
+            "firmware": unavailable,
+            "memory": {"available": True, "source": "fixture",
+                       "data": {"total_gib": 3.0}},
+            "storage": {"available": True, "source": "fixture", "data": {
+                "root_free_gib": 4.0,
+                "btrfs_root": False,
+                "snapper_present": False,
+            }},
+            "packages": {"available": True, "source": "fixture",
+                         "data": {"dpkg_consistent": False}},
+            "services": {"available": True, "source": "fixture",
+                         "data": {"failed_count": 2}},
+        }}
+        probes = {
+            "live_session": False,
+            "camera_count": 0,
+            "bluetooth_count": 0,
+            "audio_session": "unknown",
+            "disk_count": 0,
+            "largest_disk_gib": None,
+            "uefi": False,
+            "secure_boot": "not-available",
+        }
+        passport = module.build_passport(facts, None, probes, "2.1.5")
+        self.assertEqual("needs-attention", passport["verdict"]["status"])
+        self.assertGreaterEqual(passport["verdict"]["attention_count"], 4)
+        routes = {
+            item.get("route") for item in passport["checks"]
+            if item["status"] == "attention"
+        }
+        self.assertIn("drivers", routes)
+        self.assertIn("software", routes)
+
+    def test_system_passport_formats_hardware_notes_as_sentences(self):
+        module = self._passport_module("sf_passport_hardware_notes_qa")
+        check = module._local_ai_check({
+            "gpus": [{"flags": []}],
+            "verdict": {
+                "sentence": "7B models run, but slowly and with a small context.",
+                "suffixes": [
+                    "slower processor — expect well below typical speeds",
+                    "no AVX2 — CPU inference will be slower",
+                ],
+            },
+        })
+        self.assertEqual(
+            "7B models run, but slowly and with a small context. "
+            "Slower processor — expect well below typical speeds. "
+            "No AVX2 — CPU inference will be slower.",
+            check["summary"],
+        )
+
+    def test_guide_is_first_and_live_setup_exposes_the_passport(self):
+        app = (
+            CONTROL / "usr/share/shadowfetch/control-center/sfcc/app.py"
+        ).read_text()
+        guide = (
+            CONTROL / "usr/share/shadowfetch/control-center/sfcc/guide_page.py"
+        ).read_text()
+        welcome = WELCOME.read_text()
+        control_manifest = (
+            ROOT / "packages/shadowfetch-control-center/debian/"
+            "shadowfetch-control-center.install"
+        ).read_text()
+        self.assertRegex(app, r"SECTIONS\s*=\s*\[\s*\(\"guide\"")
+        self.assertIn('"passport": "guide"', app)
+        self.assertIn("GuidePage(self.open_route)", app)
+        self.assertIn("shadowfetch-passport", guide)
+        self.assertIn("Nothing is uploaded", guide)
+        self.assertGreaterEqual(welcome.count("Check this computer"), 2)
+        self.assertIn('[control, "--page", "guide"]', welcome)
+        self.assertIn("guide_page.py", control_manifest)
+        self.assertIn("shadowfetch-guide.desktop", control_manifest)
+
+    def test_first_run_reclaims_focus_after_plasma_splash(self):
+        welcome = WELCOME.read_text()
+        self.assertIn('if mode in ("ignition", "wizard"):', welcome)
+        self.assertIn(
+            "QTimer.singleShot(2500, self._activate_window)", welcome
+        )
+        self.assertIn("def _activate_window(self):", welcome)
+        self.assertIn("if win is None or not win.isVisible():", welcome)
+
+    @unittest.skipUnless(importlib.util.find_spec("PyQt6"), "PyQt6 is not installed")
+    def test_guide_verdict_badge_has_contrasting_text(self):
+        control_center = (
+            CONTROL / "usr/share/shadowfetch/control-center"
+        )
+        script = textwrap.dedent(
+            f"""
+            import sys
+            sys.path.insert(0, {str(control_center)!r})
+
+            from PyQt6.QtWidgets import QApplication
+            from sfcc.guide_page import GuidePage
+
+            app = QApplication([])
+            page = GuidePage(lambda _route: None)
+            page._started = True
+            page._render({{
+                "verdict": {{
+                    "status": "ready-with-notes",
+                    "title": "Ready with one note",
+                    "summary": "One optional driver is recommended.",
+                }},
+                "context": {{
+                    "mode": "live-session",
+                    "operating_system": "Shadowfetch Linux 2.1.5",
+                    "architecture": "x86_64",
+                }},
+                "capabilities": {{}},
+                "checks": [],
+            }})
+            assert page.state.text() == "Ready with notes"
+            style = page.state.styleSheet()
+            assert "background: #d8a24a" in style
+            assert "color: #151515" in style
+            page.show()
+            app.processEvents()
+            page.close()
+            """
+        )
+        env = os.environ.copy()
+        env["QT_QPA_PLATFORM"] = "offscreen"
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=20,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    @unittest.skipUnless(importlib.util.find_spec("PyQt6"), "PyQt6 is not installed")
     def test_welcome_stylesheet_parses_in_offscreen_qt(self):
         script = textwrap.dedent(
             f"""
@@ -617,6 +1074,62 @@ class FireEdition214Tests(unittest.TestCase):
             window.show()
             app.processEvents()
             window.close()
+            """
+        )
+        env = os.environ.copy()
+        env["QT_QPA_PLATFORM"] = "offscreen"
+        with tempfile.TemporaryDirectory() as home:
+            env["HOME"] = home
+            result = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=20,
+            )
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    @unittest.skipUnless(importlib.util.find_spec("PyQt6"), "PyQt6 is not installed")
+    def test_coding_agent_selector_and_queue_are_independent(self):
+        script = textwrap.dedent(
+            f"""
+            import importlib.machinery
+            import importlib.util
+            from pathlib import Path
+
+            path = Path({str(WELCOME)!r})
+            loader = importlib.machinery.SourceFileLoader("sf_agent_choice_qa", str(path))
+            spec = importlib.util.spec_from_loader(loader.name, loader)
+            module = importlib.util.module_from_spec(spec)
+            loader.exec_module(module)
+            app = module.QApplication([])
+
+            submitted = []
+            choice = module.BuzzPage(submitted.append)
+            assert tuple(choice.coding_agents) == ("codex", "claude", "grok", "cursor")
+            assert not any(box.isChecked() for box in choice.coding_agents.values())
+            choice.select_all_agents.setChecked(True)
+            assert all(box.isChecked() for box in choice.coding_agents.values())
+            choice.coding_agents["grok"].setChecked(False)
+            assert not choice.select_all_agents.isChecked()
+            choice._submit()
+            assert submitted[-1]["coding_agents"] == {{
+                "codex": True, "claude": True, "grok": False, "cursor": True,
+            }}
+
+            install = module.InstallPage(lambda: None)
+            install.buzz_state = "not-requested"
+            install.coding_agent_states = {{
+                "codex": "failed", "claude": "pending",
+                "grok": "pending", "cursor": "pending",
+            }}
+            started = []
+            install._start_coding_agent_setup = lambda agent: started.append(agent["key"])
+            install._start_next_ai()
+            assert started == ["claude"]
+            install.coding_agent_states["claude"] = "failed"
+            install._start_next_ai()
+            assert started == ["claude", "grok"]
             """
         )
         env = os.environ.copy()
@@ -768,11 +1281,13 @@ class FireEdition214Tests(unittest.TestCase):
             ):
                 self.assertIn(expected, content)
         self.assertNotIn("subprocess.run", command_worker)
-        self.assertIn('for name in ("buzz_worker", "worker")', welcome)
+        self.assertIn(
+            'for name in ("coding_agent_worker", "buzz_worker", "worker")', welcome
+        )
         self.assertIn("worker.cancel()", welcome)
         self.assertIn("Setup is still running", welcome)
         self.assertIn("Cancel setup", welcome)
-        self.assertIn("Retry Buzz", welcome)
+        self.assertIn("Retry failed tools", welcome)
 
     def test_user_workspace_helpers_reject_unsafe_invocation(self):
         workspace = (DEFAULTS / "data/usr/bin/shadowfetch-agent-workspace").read_text()
@@ -990,6 +1505,12 @@ class FireEdition214Tests(unittest.TestCase):
         self.assertIn("--no-remove install -y", gpu)
         self.assertIn("grep -q '^Remv '", gpu)
         self.assertNotIn("nvidia-driver-assistant --install", gpu)
+        self.assertIn('DRIVER_CLEANUP_DIR=""', gpu)
+        self.assertIn('DRIVER_RECOVERY_POINT=""', gpu)
+        self.assertIn(
+            "Phoenix Point ${DRIVER_RECOVERY_POINT} is available for recovery",
+            gpu,
+        )
         self.assertRegex(
             gpu,
             r"recommended.*\^\(nvidia-open\|cuda-drivers\)",

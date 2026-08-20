@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: shadowfetch-themes
-Source: https://www.shadowfetch.com/linux
+Source: https://www.shadowfetchlinux.org/
 Comment: The color schemes, SDDM theme and look-and-feel are derived from KDE Breeze.
 
 Files: *

@@ -37,7 +37,7 @@ Fireproof's contract, all of it enforced in this one process:
     the archive download the user explicitly clicked for, against the
     mirrors already configured in apt.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/
 """
 
 import fnmatch

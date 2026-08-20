@@ -9,16 +9,16 @@ windowPlacement: center
 strings:
     productName:         Shadowfetch Linux
     shortProductName:    Shadowfetch
-    version:             2.0.1
-    shortVersion:        2.0.1
-    versionedName:       Shadowfetch Linux 2.0.1 (Umbra)
-    shortVersionedName:  Shadowfetch 2.0.1
+    version:             2.1.5
+    shortVersion:        2.1.5
+    versionedName:       Shadowfetch Linux 2.1.5 (Umbra)
+    shortVersionedName:  Shadowfetch 2.1.5
     bootloaderEntryName: Shadowfetch
-    productUrl:          https://shadowfetch.com/linux
-    supportUrl:          https://shadowfetch.com/linux/support
-    knownIssuesUrl:      https://shadowfetch.com/linux/issues
-    releaseNotesUrl:     https://shadowfetch.com/linux
-    donateUrl:           https://www.debian.org
+    productUrl:          https://www.shadowfetchlinux.org/
+    supportUrl:          https://www.shadowfetchlinux.org/support
+    knownIssuesUrl:      https://www.shadowfetchlinux.org/issues
+    releaseNotesUrl:     https://www.shadowfetchlinux.org/
+    donateUrl:           https://www.shadowfetchlinux.org/donate
 
 sidebar: widget
 navigation: widget

@@ -17,12 +17,21 @@ The Buzz compose definition is adapted from the Apache-2.0 Buzz project at
 https://github.com/block/buzz. The optional Buzz Desktop package retains its
 upstream Apache-2.0 license and is downloaded only after explicit user consent.
 
+The optional Codex CLI is maintained by OpenAI under Apache-2.0 at
+https://github.com/openai/codex. It is downloaded only after explicit user
+consent and is installed for the current desktop user, not embedded in the ISO.
+
+The optional Claude Code, Grok Build, and Cursor Agent downloads are not
+embedded in the ISO. They are third-party products governed by their vendors'
+terms and are downloaded only after explicit user consent. Shadowfetch's MIT
+license does not grant rights to those downloaded products.
+
 ## Written offer for source
 
 The complete corresponding source for the Shadowfetch packages is:
-  * published at https://github.com/Realbobcorbin/shadowfetch-linux
+  * published at https://github.com/ShadowfetchLinux/shadowfetch-linux
   * available as a source tarball at
-      https://shadowfetch.com/linux/apt/sources/shadowfetch-source-2.1.4.tar.gz
+      https://shadowfetch.com/linux/apt/sources/shadowfetch-source-2.1.5.tar.gz
 
 For source of any upstream Debian/KDE component, contact
 signing@shadowfetch.com and we will direct you to, or provide, the exact

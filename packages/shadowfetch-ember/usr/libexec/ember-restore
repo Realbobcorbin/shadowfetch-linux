@@ -42,7 +42,7 @@ Idempotent by design: safe to run twice, safe to run with nothing to do.
 Runs automatically as ExecStartPre and ExecStopPost of
 shadowfetch-ember.service.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/
 SFHELP
     exit 0 ;;
   --version)

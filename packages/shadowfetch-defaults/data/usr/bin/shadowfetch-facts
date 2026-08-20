@@ -362,6 +362,7 @@ def shadowfetch_stack():
     tools = {}
     for t in ["shadowfetch-gpu", "shadowfetch-buzz", "shadowfetch-health",
               "shadowfetch-update", "shadowfetch-control",
+              "shadowfetch-passport",
               "shadowfetch-agent-workspace", "shadowfetch-agent-doctor",
               "shadowfetch-agent-tools"]:
         tools[t] = shutil.which(t) is not None

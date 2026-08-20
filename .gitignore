@@ -106,3 +106,7 @@ packages/shadowfetch-meta/debian/shadowfetch-desktop/
 packages/shadowfetch-meta/debian/shadowfetch-nvidia/
 packages/shadowfetch-themes/debian/shadowfetch-themes/
 packages/shadowfetch-welcome/debian/shadowfetch-welcome/
+
+# QA evidence + release scratch (regenerable; matches the /work/qa-2.1.4 precedent)
+/work/
+/live-build/binary.contents

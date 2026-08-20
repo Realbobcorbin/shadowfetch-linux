@@ -43,7 +43,7 @@ Called by the Shadowfetch Control Center via pkexec
 (action com.shadowfetch.ember.duration). Everything it writes lives on
 tmpfs and is undone by ember-restore or by a reboot.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/
 SFHELP
     exit 0 ;;
   --version)

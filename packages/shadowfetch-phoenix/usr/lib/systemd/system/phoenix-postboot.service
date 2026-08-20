@@ -1,6 +1,6 @@
 [Unit]
 Description=Phoenix Recovery post-restore pass (update-grub flag, @_prev/@new garbage collection)
-Documentation=https://shadowfetch.com/linux/
+Documentation=https://www.shadowfetchlinux.org/
 # Runs every normal boot; the script quick-exits when there is nothing to do.
 # Never inside an overlay session (do not GC the real volume while the user
 # rides a Point) and never on live media.

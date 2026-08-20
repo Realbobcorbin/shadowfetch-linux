@@ -6,6 +6,6 @@ Exec=shadowfetch-welcome
 Icon=shadowfetch
 Terminal=false
 Categories=Utility;X-Shadowfetch-AI;
-Keywords=setup;welcome;desktop;apps;Buzz;local AI;
+Keywords=setup;welcome;desktop;apps;Buzz;Codex;Claude;Grok;Cursor;local AI;
 X-KDE-autostart-phase=2
 OnlyShowIn=KDE;

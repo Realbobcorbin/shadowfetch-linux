@@ -6,7 +6,7 @@ polling Buzz shared compute /v1/models on 127.0.0.1. Publishes the
 org.shadowfetch.Firewatch1 D-Bus system service: sensor snapshots, the
 flame level + ELI (the single source Ember consumes), the humanized
 heat map, local model availability, storage health and
-thermal-throttle events. Part of Shadowfetch Linux 2.1.4 "Fire Edition".
+thermal-throttle events. Part of Shadowfetch Linux 2.1.5 "Fire Edition".
 """
 
 # ---- --help / --version, BEFORE any other import ----------------------------
@@ -38,7 +38,7 @@ WHAT IT DOES
 
   Nothing here mutates the system and nothing leaves the machine.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/""")
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/""")
     raise SystemExit(0)
 if "--version" in _sfsys.argv[1:]:
     print("firewatchd (Shadowfetch Linux) "

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Shadowfetch Guide
+GenericName=System Passport
+Comment=Check what works on this computer without uploading its identity
+Exec=shadowfetch-control --page guide
+Icon=shadowfetch
+Terminal=false
+Categories=System;
+Keywords=hardware;compatibility;passport;drivers;diagnostics;privacy;
+StartupNotify=true

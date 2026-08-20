@@ -19,7 +19,7 @@ notify(){ # post a short line to brandy-elaine via brandy admin token
   local tok=$(grep -m1 '^DISCORD_BOT_TOKEN=' "$HOME/.hermes/profiles/brandy/.env" | cut -d= -f2- | tr -d '"'"'"' ')
   [ -z "$tok" ] && return 0
   curl -s -X POST "https://discord.com/api/v10/channels/$ROOM/messages" \
-    -H "Authorization: Bot $tok" -H "User-Agent: DiscordBot (https://shadowfetch.com, 1.0)" \
+    -H "Authorization: Bot $tok" -H "User-Agent: DiscordBot (https://www.shadowfetchlinux.org, 1.0)" \
     -H "Content-Type: application/json" \
     --data "$(python3 -c 'import json,sys;print(json.dumps({"content":sys.argv[1][:1900]}))' "$msg")" >/dev/null 2>&1
 }
@@ -69,7 +69,7 @@ if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   echo "PUBLISH_SKIPPED_NO_CREDS"; exit 0
 fi
 if make VERSION="$NEW" publish >>"$LOG" 2>&1; then
-  notify "🟢 SHIPPED Shadowfetch Linux $NEW ($SZ) — ISO + APT repo live on R2. Verify: https://shadowfetch.com/linux/  · Note: Worker (\`make deploy-worker\`) runs Mac-side if the download page needs the new version wired."
+  notify "🟢 SHIPPED Shadowfetch Linux $NEW ($SZ) — ISO + APT repo live on R2. Verify: https://www.shadowfetchlinux.org/  · Note: Worker (\`make deploy-worker\`) runs Mac-side if the download page needs the new version wired."
   echo "PUBLISHED $NEW"
 else
   notify "🔴 $NEW built+QA'd but PUBLISH failed (R2 upload). ISO is safe on box. Log: $LOG"

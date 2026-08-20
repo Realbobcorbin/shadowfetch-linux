@@ -1,7 +1,7 @@
 <!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"
  "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">
 <!--
-  Shadowfetch Linux 2.1.4 "Fire Edition" - the seven-category launcher.
+  Shadowfetch Linux 2.1.5 "Fire Edition" - the seven-category launcher.
 
   This is an XDG merge-dir drop-in.  startplasma sets XDG_MENU_PREFIX
   unconditionally and kservice hardcodes applications-merged/, so this

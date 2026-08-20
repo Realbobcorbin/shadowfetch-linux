@@ -1,6 +1,6 @@
 [Unit]
 Description=Fallback trigger for the Fireproof first-boot-after-update check
-Documentation=https://shadowfetch.com/linux/
+Documentation=https://www.shadowfetchlinux.org/
 # graphical.target may never activate on exactly the boots this check
 # exists for. Fire the service 120 s into every boot as a backstop; the
 # ConditionPathExists on the service makes it a no-op when no update is

@@ -1,3 +1,13 @@
+shadowfetch-control-center (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild the Local AI and system control surfaces for 2.1.5.
+  * Keep Buzz status bounded to the private loopback compute endpoint.
+  * Lead with Shadowfetch Guide and its private System Passport, then route
+    highlighted issues to Drivers, Recover, Software, or Local AI without
+    granting an assistant unrestricted system control.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-control-center (2.1.4-1) umbra; urgency=high
 
   * Rename the Agents surface to Local AI and make Buzz shared compute,

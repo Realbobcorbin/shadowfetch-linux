@@ -25,7 +25,7 @@ WHAT IT DOES
   Baloo file indexing for this session so re-logging in during Ember keeps
   indexing paused. Does nothing otherwise. Never starts Ember itself.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/
 SFHELP
     exit 0 ;;
   --version)

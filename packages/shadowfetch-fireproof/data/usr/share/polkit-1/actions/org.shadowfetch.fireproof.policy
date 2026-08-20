@@ -4,7 +4,7 @@
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
 <policyconfig>
   <vendor>Shadowfetch Project</vendor>
-  <vendor_url>https://shadowfetch.com/linux/</vendor_url>
+  <vendor_url>https://www.shadowfetchlinux.org/</vendor_url>
 
   <action id="org.shadowfetch.fireproof.update">
     <description>Apply a system update through Fireproof</description>

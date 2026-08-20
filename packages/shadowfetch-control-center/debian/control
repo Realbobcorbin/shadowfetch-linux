@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Shadowfetch Project <signing@shadowfetch.com>
 Build-Depends: debhelper-compat (= 13), dh-python, python3
 Standards-Version: 4.6.2
-Homepage: https://shadowfetch.com/linux/
+Homepage: https://www.shadowfetchlinux.org/
 
 Package: shadowfetch-control-center
 Architecture: all
@@ -25,10 +25,11 @@ Recommends:
  konsole
 Replaces: shadowfetch-defaults (<< 2.1.2-1~)
 Breaks: shadowfetch-defaults (<< 2.1.2-1~)
-Description: Shadowfetch Control Center - six-section shell and Fire pages
- The 2.1.2 "Fire Edition" Control Center: one window with six fixed
- sections - Ignite (Ember Mode), Watch (Firewatch), Recover (Phoenix),
- Agents, Drivers, and Software & Updates. Supports deep links
+Description: Shadowfetch Control Center - Guide and Fire Edition system pages
+ The Fire Edition Control Center starts with Shadowfetch Guide, a private
+ read-only System Passport, followed by Ignite (Ember Mode), Watch
+ (Firewatch), Recover (Phoenix), Local AI, Drivers, and Software & Updates.
+ Supports deep links
  (--page section[:tab]) with single-instance routing over the session
  bus, so Welcome, Firewatch, Phoenix and Fireproof all land in the same
  window.

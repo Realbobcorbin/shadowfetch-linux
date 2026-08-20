@@ -4,7 +4,7 @@
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
 <policyconfig>
   <vendor>Shadowfetch Project</vendor>
-  <vendor_url>https://shadowfetch.com/linux/</vendor_url>
+  <vendor_url>https://www.shadowfetchlinux.org/</vendor_url>
 
   <!-- Installing a bundle mutates the system: administrator authentication,
        kept for the session so a retry after a failure does not re-prompt. -->

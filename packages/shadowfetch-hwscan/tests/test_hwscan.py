@@ -248,6 +248,39 @@ class TestParsers(unittest.TestCase):
         self.assertIsNone(
             hwscan.run_boxed(["sh", "-c", "sleep 2"], timeout_s=0.2))
 
+    def test_vulkan_json_file_output_is_isolated_from_caller(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            caller = root / "caller"
+            caller.mkdir()
+            vulkaninfo = root / "vulkaninfo"
+            vulkaninfo.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' '{\"Profiles\": []}' "
+                "> 'VP_VULKANINFO_Fixture_1.json'\n",
+                encoding="utf-8",
+            )
+            vulkaninfo.chmod(vulkaninfo.stat().st_mode | stat.S_IXUSR)
+            previous = os.getcwd()
+            try:
+                os.chdir(caller)
+                output = hwscan.run_boxed([str(vulkaninfo), "--json"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(json.loads(output), {"Profiles": []})
+            self.assertEqual(list(caller.iterdir()), [])
+
+    def test_vulkan_json_stdout_compatibility_is_preserved(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            vulkaninfo = pathlib.Path(temporary) / "vulkaninfo"
+            vulkaninfo.write_text(
+                "#!/bin/sh\nprintf '%s\\n' '{\"Profiles\": []}'\n",
+                encoding="utf-8",
+            )
+            vulkaninfo.chmod(vulkaninfo.stat().st_mode | stat.S_IXUSR)
+            output = hwscan.run_boxed([str(vulkaninfo), "--json"])
+            self.assertEqual(json.loads(output), {"Profiles": []})
+
     def test_run_boxed_success(self):
         self.assertEqual(hwscan.run_boxed(["sh", "-c", "echo hi"]), "hi\n")
 

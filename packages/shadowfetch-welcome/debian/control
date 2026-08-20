@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Shadowfetch Project <signing@shadowfetch.com>
 Build-Depends: debhelper-compat (= 13), dh-python, python3
 Standards-Version: 4.6.2
-Homepage: https://shadowfetch.com/linux/
+Homepage: https://www.shadowfetchlinux.org/
 
 Package: shadowfetch-welcome
 Architecture: all

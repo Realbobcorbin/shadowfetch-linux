@@ -1,6 +1,6 @@
 [Unit]
 Description=Phoenix Recovery first-boot setup (snapper config, cleanup timer, grub-btrfsd)
-Documentation=https://shadowfetch.com/linux/
+Documentation=https://www.shadowfetchlinux.org/
 # Same live-media guard as shadowfetch-firstboot.service: booting the USB to
 # look at the distro must never create a snapper config on the visitor's
 # machine. Also never arm while riding a read-only Point (overlay session).

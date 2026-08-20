@@ -1,8 +1,8 @@
-"""The Control Center shell: six fixed sections, deep-link routing, one
+"""The Control Center shell: seven fixed sections, deep-link routing, one
 window.
 
-Sidebar order is fixed — Ignite / Watch / Recover / Agents / Drivers /
-Software & Updates (subtitle "Updates & bundles", the design's own
+Sidebar order is fixed - Guide / Ignite / Watch / Recover / Local AI /
+Drivers / Software & Updates (subtitle "Updates & bundles", the design's own
 fallback name so the headline safety feature never hides behind a word
 that means "app store").
 
@@ -34,6 +34,7 @@ from sfcc.agents_page import AgentsPage
 from sfcc.drivers_page import DriversPage
 from sfcc.ember_page import EmberPage
 from sfcc.firewatch_page import FirewatchPage
+from sfcc.guide_page import GuidePage
 from sfcc.phoenix_page import PhoenixPage
 from sfcc.software_page import SoftwarePage
 from sfcc.theme import label
@@ -42,6 +43,7 @@ BUS_NAME = "com.shadowfetch.ControlCenter"
 OBJ_PATH = "/com/shadowfetch/ControlCenter"
 
 SECTIONS = [
+    ("guide", "Guide", "System Passport"),
     ("ignite", "Ignite", None),
     ("watch", "Watch", None),
     ("recover", "Recover", None),
@@ -51,6 +53,7 @@ SECTIONS = [
 ]
 
 ALIASES = {
+    "guide": "guide", "passport": "guide", "system-passport": "guide",
     "ignite": "ignite", "ember": "ignite",
     "watch": "watch", "firewatch": "watch",
     "recover": "recover", "phoenix": "recover", "recovery": "recover",
@@ -190,6 +193,7 @@ class ControlCenterWindow(QWidget):
 
         self.stack = QStackedWidget()
         self.pages = [
+            GuidePage(self.open_route),
             EmberPage(self.firewatch, self.open_route),
             FirewatchPage(self.firewatch),
             PhoenixPage(),
@@ -238,7 +242,9 @@ class ControlCenterWindow(QWidget):
         # Only Software & Updates ever shows a badge; fireproofd suppresses
         # the count itself for a set the user already rolled back.
         count = busutil.fireproof_updates()
-        self._entries[5].set_badge(count if count else None)
+        index = next(i for i, (key, _title, _subtitle) in enumerate(SECTIONS)
+                     if key == "software")
+        self._entries[index].set_badge(count if count else None)
 
     def open_route(self, route: str) -> None:
         parts = [p for p in str(route).split(":") if p]

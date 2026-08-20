@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: shadowfetch-control-center
-Source: https://www.shadowfetch.com/linux
+Source: https://www.shadowfetchlinux.org/
 
 Files: *
 Copyright: 2026 Shadowfetch Project <signing@shadowfetch.com>

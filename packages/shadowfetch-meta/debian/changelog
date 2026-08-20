@@ -1,3 +1,10 @@
+shadowfetch-meta (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild the Fire Edition desktop and creative metapackages for 2.1.5.
+  * Keep NVIDIA driver selection in the verified hardware-aware setup path.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-meta (2.1.4-1) umbra; urgency=medium
 
   * Rebuild the Fire Edition desktop and creative metapackages for 2.1.4.

@@ -1,3 +1,9 @@
+shadowfetch-ember (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild Ember performance controls for the 2.1.5 Fire Edition.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-ember (2.1.4-1) umbra; urgency=medium
 
   * Route AI workload actions to the renamed Local AI control surface.

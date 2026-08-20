@@ -94,7 +94,7 @@ WHAT IT DOES
 
   Status is published on the system bus as com.shadowfetch.Ember1.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/""")
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/""")
         raise SystemExit(0)
     if _arg == "--version":
         print("emberd (Shadowfetch Linux) %s" % _version_string())

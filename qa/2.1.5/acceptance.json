@@ -1,0 +1,1032 @@
+{
+  "schema_version": 1,
+  "release": {
+    "version": "2.1.5",
+    "edition": "Fire Edition",
+    "codename": "Umbra"
+  },
+  "evidence_root": "work/qa-2.1.5/evidence",
+  "artifact": {
+    "iso_path": "shadowfetch-2.1.5-amd64.iso",
+    "iso_sha256": "848f043e4d6f85c3607e7034ba911a1ce8b4a317674feebef8b07fcd8f531c24",
+    "iso_size_bytes": 3968471040,
+    "signature_path": "shadowfetch-2.1.5-amd64.iso.asc",
+    "signing_fingerprint": "8F13CE1535EE1F4A2916A1F73C5C900B7BE80CA1",
+    "evidence_bundle_path": "work/release-2.1.5/evidence-bundle-2.1.5.tar.gz",
+    "evidence_bundle_sha256": "7b4737416759436567bac1224a8722c46e1d675d74fe7a1e9f51eaf16fc436fe"
+  },
+  "cases": [
+    {
+      "id": "SRC-01",
+      "phase": "prepublish",
+      "area": "source",
+      "title": "Focused source and behavior suite passes",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "candidate-phoenix-fix/gates/source-gate.log",
+          "sha256": "8270fcc18cecb05b4d13ac361579d254768900b2607bc3e9ae5f27fc77930ebc"
+        }
+      ],
+      "notes": "Fresh source behavior suite passed after the Phoenix separate-/boot rollback fix."
+    },
+    {
+      "id": "SRC-02",
+      "phase": "prepublish",
+      "area": "source",
+      "title": "ShellCheck, syntax and whitespace gates pass",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "candidate-phoenix-fix/gates/source-gate.log",
+          "sha256": "8270fcc18cecb05b4d13ac361579d254768900b2607bc3e9ae5f27fc77930ebc"
+        }
+      ],
+      "notes": "Fresh syntax, ShellCheck, parser and contract gates passed."
+    },
+    {
+      "id": "SRC-03",
+      "phase": "prepublish",
+      "area": "source",
+      "title": "Secret scan and retired OpenClaw and Hermes runtime scan pass",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "candidate-phoenix-fix/gates/source-gate.log",
+          "sha256": "8270fcc18cecb05b4d13ac361579d254768900b2607bc3e9ae5f27fc77930ebc"
+        }
+      ],
+      "notes": "Fresh gitleaks and retired-runtime scans passed."
+    },
+    {
+      "id": "PKG-01",
+      "phase": "prepublish",
+      "area": "packages",
+      "title": "Every binary and corresponding source package builds",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "candidate-phoenix-fix/gates/package-gate.log",
+          "sha256": "a6468e45ce68979076d1694c5b5e965ea48710b1a15e8bec8ecaa130fae39a20"
+        }
+      ],
+      "notes": "Fifteen exact binary packages and thirteen signed corresponding source packages built and extracted."
+    },
+    {
+      "id": "PKG-02",
+      "phase": "prepublish",
+      "area": "packages",
+      "title": "Signed local repository and package install smoke test pass",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "candidate-phoenix-fix/gates/package-gate.log",
+          "sha256": "a6468e45ce68979076d1694c5b5e965ea48710b1a15e8bec8ecaa130fae39a20"
+        }
+      ],
+      "notes": "Signed APT repository, Debian dependency solve and clean runtime installation passed."
+    },
+    {
+      "id": "ISO-01",
+      "phase": "prepublish",
+      "area": "image",
+      "title": "ISO structure, checksum and detached signature verify",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "candidate-phoenix-fix/gates/iso-build.log",
+          "sha256": "206872d5e5f8441baf45d7a1eab7db6695a4310d748fcbbc2694f3269b4f3343"
+        }
+      ],
+      "notes": "Exact ISO 848f043e passed checksum, EdDSA signature, hybrid boot, internal checksum, squashfs and payload gates."
+    },
+    {
+      "id": "BOOT-01",
+      "phase": "prepublish",
+      "area": "boot",
+      "title": "Final ISO reaches the live Plasma desktop in BIOS mode",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/bios/live-desktop-ready.png",
+          "sha256": "dd3732d5f0ea4bb837de5f1cb54b0ff5f3cbb1a0b407ae5d6ef9250fc2213427"
+        }
+      ],
+      "notes": "Exact ISO reached the branded Plasma live desktop in legacy BIOS mode; live-session evidence suite passed."
+    },
+    {
+      "id": "BOOT-02",
+      "phase": "prepublish",
+      "area": "boot",
+      "title": "Final ISO reaches the live Plasma desktop in UEFI mode",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/live-desktop-ready.png",
+          "sha256": "6a349b0ff4b6d9d2ce822c3cae17440c1ade9ae61c16d49d6ba7e25e4096a2a3"
+        }
+      ],
+      "notes": "Exact ISO reached the branded Plasma live desktop in UEFI mode; live-session evidence suite passed."
+    },
+    {
+      "id": "INSTALL-01",
+      "phase": "prepublish",
+      "area": "install",
+      "title": "Clean UEFI Btrfs installation survives reboot and health checks",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/installed/storage.txt",
+          "sha256": "ec10bd51c113028126dc8857baccdbd376f7ce2fdb08318c4e78f9c4abfe3c5e"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/installed/package-health.txt",
+          "sha256": "b8d97fa5f27fa2e2463f1d83a366a93fcef8b402d7b67fc0e275cd5d1a73e505"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/installed/installed-cleanup.txt",
+          "sha256": "790506e786e0b774e37ef49dd14a8de56961da3ad4c05f6c9f552ba8f04f8d11"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/installed/failed-units.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "notes": "Fresh UEFI install booted from disk with separate ext4 /boot, Btrfs root, clean package state, live-only cleanup and zero failed units."
+    },
+    {
+      "id": "INSTALL-02",
+      "phase": "prepublish",
+      "area": "install",
+      "title": "Clean BIOS encrypted installation survives reboot and unlock",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/bios/calamares.log",
+          "sha256": "17647f9670a5472baa4e76de72daba38d0126b2a927151dd1e16a6baeb2dae7f"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/bios/installed/storage.txt",
+          "sha256": "e6c025e789608326dec71f2633cd94429632eb4c479dd95a5fdf9e78040aee8e"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/bios/installed/package-health.txt",
+          "sha256": "b8d97fa5f27fa2e2463f1d83a366a93fcef8b402d7b67fc0e275cd5d1a73e505"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/bios/installed/failed-units.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/bios/encrypted-boot-unlock.png",
+          "sha256": "98ad1dcb42013dcd25741c1c2dca166befedb314620028c2b9538ad9726a0e36"
+        }
+      ],
+      "notes": "Exact signed candidate completed a clean legacy BIOS install with separate /boot and LUKS2-encrypted Btrfs root; encrypted unlock, first login, package health, and failed-unit checks passed."
+    },
+    {
+      "id": "UPGRADE-01",
+      "phase": "prepublish",
+      "area": "upgrade",
+      "title": "A real Shadowfetch Linux 2.1.4 installation upgrades to 2.1.5 with user data intact",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/pre-upgrade.txt",
+          "sha256": "16fd98736a093e7b574ac4eeef45202d84fb9e4ba2a53acbb600e3bfcb0d6d8d"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/upgrade.log",
+          "sha256": "8304b514c30d3607739b1cc55435e3b433a0e9957d962c66af025368f334eae0"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/post-upgrade-pre-reboot.txt",
+          "sha256": "3bd2ce352e43529ace594a7e63c0b0c0fd1348281a4beebfa120f5b9e79d2af3"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/post-upgrade-reboot.txt",
+          "sha256": "ff81da63d49e316ec1ca45ab9970dc064a8755636680f54fba96fcd6f97888ab"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/boot-id-before.txt",
+          "sha256": "66d7c885080a51aa220566482e7cd2fcc6e8b25557979558d14853331bdc207b"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/boot-id-after.txt",
+          "sha256": "bfdf30407550681a1da7299cc5d6b82e97413cd51e06f54f8e45ea901f70a660"
+        }
+      ],
+      "notes": "A genuine 2.1.4 UEFI/Btrfs install with separate /boot upgraded through the shipped Safe Update path to 2.1.5. User canaries and the manually installed sl package retained identical state, all 13 Shadowfetch packages upgraded, the Phoenix apt pair exists, the new kernel booted, package health remained clean, and no services failed. Debian needrestart restarted the transient QA wrapper once; its second invocation was a successful no-op and did not repeat package changes."
+    },
+    {
+      "id": "GUIDE-01",
+      "phase": "prepublish",
+      "area": "guide",
+      "title": "System Passport schema and adversarial fixtures prove identifier redaction and honest verdicts",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/guide-validation.log",
+          "sha256": "76e61e152a0a6785f54f1202a84f52730d66b8c0ae8e02a3d47c845cf54d64e2"
+        },
+        {
+          "kind": "log",
+          "path": "candidate-phoenix-fix/gates/source-gate.log",
+          "sha256": "8270fcc18cecb05b4d13ac361579d254768900b2607bc3e9ae5f27fc77930ebc"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/installed/passport.json",
+          "sha256": "4b8ccb05a666f60d5fac720819e2be433332adbc5d44816b915942c2e16bf210"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/installed/passport-redaction.txt",
+          "sha256": "9f81a905c615fc576e8ef396af74c42e6dcc0e7104bf6c409ecaa2f081056dd9"
+        }
+      ],
+      "notes": "Exact-candidate adversarial tests proved honest escalation and allowlisted redaction; installed reports passed active hostname/account/IP/MAC/UUID leak probes."
+    },
+    {
+      "id": "GUIDE-02",
+      "phase": "prepublish",
+      "area": "guide",
+      "title": "Guide works in the final live session and upgraded installed system with valid HTML and JSON export",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/guide-validation.log",
+          "sha256": "76e61e152a0a6785f54f1202a84f52730d66b8c0ae8e02a3d47c845cf54d64e2"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/live/passport.json",
+          "sha256": "b961ac37e48610e91978c2128881449c72ae00e5670c5fb872db08f8c161a127"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/live/passport.html",
+          "sha256": "e4841750bab9a28889364ac2255244ed33498d05d868c3ef4c9128e98f32d98c"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/installed/passport.json",
+          "sha256": "4b8ccb05a666f60d5fac720819e2be433332adbc5d44816b915942c2e16bf210"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/installed/passport.html",
+          "sha256": "41b28c72b93e3c15d52b732531d78c57577184ea8248d9b42c726aa7a76ff1c1"
+        }
+      ],
+      "notes": "Guide/System Passport generated valid schema-1 JSON and nonempty 2.1.5 HTML exports in both the exact final live session and the real upgraded installation."
+    },
+    {
+      "id": "GUIDE-03",
+      "phase": "prepublish",
+      "area": "guide",
+      "title": "Passport check performs no upload, package change, privileged repair or implicit report write",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/guide-validation.log",
+          "sha256": "76e61e152a0a6785f54f1202a84f52730d66b8c0ae8e02a3d47c845cf54d64e2"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/installed/passport-sandbox.json",
+          "sha256": "4d4400658c2b49d24ee7a00f803055e41b127a9bebbec9e20a7c7fb6fcb11982"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/installed/passport-no-implicit-write.txt",
+          "sha256": "d6179ffb707e031e122dd9fc84b3512dafb4599bd6e2458be3b27b3cd5b1cc85"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/installed/dpkg-before.sha256",
+          "sha256": "7bf0338b424f591a7193077d0fe63477b436ce493b16798d138ca6be38b828a2"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/upgrade-214/installed/dpkg-after.sha256",
+          "sha256": "7bf0338b424f591a7193077d0fe63477b436ce493b16798d138ca6be38b828a2"
+        }
+      ],
+      "notes": "Passport completed with PrivateNetwork=yes, wrote no implicit report file, and left the dpkg status hash byte-identical; collectors also showed no repair or package mutation."
+    },
+    {
+      "id": "AI-01",
+      "phase": "prepublish",
+      "area": "local-ai",
+      "title": "Buzz recommends and downloads a compatible open model and completes a real inference",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/buzz/compute-initial.png",
+          "sha256": "7a14ddd9cad1c3e0b32953e6d89e44eb35c8b1fa34b64492544bab921d45107a"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/model-integrity-and-list.txt",
+          "sha256": "b6e9dc8a6a1426549aed0834b276e5740c9bf7d54ee5cab93a47e1d409ad92e8"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/inference.json",
+          "sha256": "ccdd6a3bb8df53fe9e3ee7ed12716ff4036591da4d0ca75746154234130110c7"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/model-ready-clean.png",
+          "sha256": "1d39731db19610f3b3bd86120f96574b1e71d2673143ed3a8cb1d6a87777d870"
+        }
+      ],
+      "notes": "Buzz 0.5.17 recommended the 4.6 GB Gemma 4 Q4_K_M model as a fit, waited for explicit sharing consent, downloaded a 4,977,171,584-byte object whose SHA-256 matches its content-addressed name, listed it on loopback 9337, and returned SHADOWFETCH_AI_READY from real inference."
+    },
+    {
+      "id": "AI-02",
+      "phase": "prepublish",
+      "area": "local-ai",
+      "title": "Buzz model download handles offline failure, reconnect and retry without false success",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/offline-retry.log",
+          "sha256": "c4ffdd155b5fb504ad103366cc6a41e5e7a20f303dce587d3d511c968a25677d"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/offline-download.png",
+          "sha256": "2f717984467b67aa3ed8b3a32e980d328dea28f1c7b710698df9c302e6775611"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/offline-recovery-summary.txt",
+          "sha256": "34ac2fb174182147db4fb80031ff0e666b37e61d62424b999a3203fe0d511a44"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/clean-retry-progress.png",
+          "sha256": "7c751d1a496123362d3dab75e2e05f6db95eacc44b447f00aaad2c5f0b76f6c8"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/inference.json",
+          "sha256": "ccdd6a3bb8df53fe9e3ee7ed12716ff4036591da4d0ca75746154234130110c7"
+        }
+      ],
+      "notes": "QMP link loss froze the partial at 1,261,952,028 bytes, left 9337 unserved, and kept the relay healthy. Reconnect did not falsely succeed; automatic resume was not observed, so the QA operator cancelled, removed only the incomplete disposable cache object, relaunched, retried, and completed real inference. This explicit clean-retry caveat is preserved in evidence."
+    },
+    {
+      "id": "AI-03",
+      "phase": "prepublish",
+      "area": "local-ai",
+      "title": "Low disk, cancelled Buzz model download and changed upstream metadata fail safely",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ai/failure-paths/cancelled-download.txt",
+          "sha256": "5ef7602385680860b61c0256540366e9d96a3f3a371b443e6b1cfa60ed1503ad"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ai/failure-paths/low-disk.log",
+          "sha256": "85568ebdade92ad12c0b63e74a52dcffbf21707249315b4b027906d57e1d493c"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ai/failure-paths/altered-package.log",
+          "sha256": "fc62a0e0518b623531952a883343347c1e2c88b692f4b222dc33079e3c0018eb"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ai/failure-paths/targeted-source-tests.log",
+          "sha256": "42ee9aeceb95001b07d6fe730b7108ab836fddd3b6b386048fba43a6cf7dd323"
+        }
+      ],
+      "notes": "Cancellation left a nonempty partial with no compute listener; the 8 GiB free-space gate blocked privileged provisioning; altered upstream package bytes failed SHA-256 before apt; targeted source contract tests passed."
+    },
+    {
+      "id": "BUZZ-01",
+      "phase": "prepublish",
+      "area": "buzz",
+      "title": "Rootless Buzz stack passes ordered readiness and loopback binding checks",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/buzz/runtime/result.txt",
+          "sha256": "6d74836bdce24a96d0d1eb0b6d9a3d1310ea66cc284de85ae911e5042952d10c"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/buzz/runtime/rootless-containers.txt",
+          "sha256": "a6bd513eb6494fceed0ffa2bc4a92b80277f8735424a752e511fbddbb124f849"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/buzz/runtime/relay-listener.txt",
+          "sha256": "87061c8ba82c640897c7fd167886209b77da8c084c39d08ed12996698f0f5c8d"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/buzz/runtime/config-permissions.txt",
+          "sha256": "cc57afeef33d21ad2146ddaf5d67aef7b22170b515418f12a0e52cd52b0c1ab3"
+        }
+      ],
+      "notes": "Rootless PostgreSQL, Redis, MinIO and digest-pinned relay containers were healthy; relay bound only 127.0.0.1:3000; ordered readiness and owner/secret permissions passed."
+    },
+    {
+      "id": "BUZZ-02",
+      "phase": "prepublish",
+      "area": "buzz",
+      "title": "Native Buzz Desktop connects to the local relay inside the final VM",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/buzz/native-launch.png",
+          "sha256": "4c792f9effde3be50af8dd96de7cc2fb4a6fa9992d2b37942c8d2546274c0b99"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/buzz/runtime/desktop-process.txt",
+          "sha256": "0b74a8c6a0d4407bb106c4504b9335c90fbe48db39b1e021bd798ce08eca9ec9"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/buzz/runtime/desktop-environment.txt",
+          "sha256": "b405175256ab009932f2342f09971b006b26b45bc7a7f391800fc9cee393b0e1"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/buzz/runtime/relay-readiness.json",
+          "sha256": "31bf75f4c0a97cc1f7b60df824fa390b3be9ba014f29b63c87c698ba63d9a9fd"
+        }
+      ],
+      "notes": "Official native Buzz Desktop 0.5.17 ran as the desktop user and connected to ws://127.0.0.1:3000; the native window and ready relay were captured in the final UEFI VM."
+    },
+    {
+      "id": "BUZZ-03",
+      "phase": "prepublish",
+      "area": "buzz",
+      "title": "Buzz Desktop remains responsive on Plasma Wayland with the guarded WebKit renderer path",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/buzz/runtime/desktop-environment.txt",
+          "sha256": "b405175256ab009932f2342f09971b006b26b45bc7a7f391800fc9cee393b0e1"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/buzz/runtime/desktop-service-after-20s.txt",
+          "sha256": "5159c347452eb82b07492cf956de15c5b8a46dd17dd50eb16a21399542587234"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/ai/model-ready-clean.png",
+          "sha256": "1d39731db19610f3b3bd86120f96574b1e71d2673143ed3a8cb1d6a87777d870"
+        }
+      ],
+      "notes": "Buzz used the Wayland shared-memory DMA-BUF guard, remained active with zero restarts and clean exit status through repeated readiness/process probes, and rendered a responsive native Compute screen."
+    },
+    {
+      "id": "AGENTS-01",
+      "phase": "prepublish",
+      "area": "coding-agents",
+      "title": "Optional Codex, Claude Code, Grok Build, and Cursor Agent choices stay independent, verified, user-owned, and credential-free",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/agents/setup-complete.png",
+          "sha256": "a2be50bc161647726cdff2d8451970baf6043ac16728c79f9c256e9ab8f60606"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/agents/agents-proof.txt",
+          "sha256": "781c298d784d97fe21683892081828f2b1779148508463a96bafcb11746d6507"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/agents-all-selected.png",
+          "sha256": "8b9730d5338147b2eb82c5de319366216c5c516f70fcf25ea024340a02bbdb71"
+        }
+      ],
+      "notes": "Native integrated setup installed Buzz plus all four optional coding tools; pinned versions, launchers, user ownership, independent selection, signed/artifact receipts, unauthenticated first run, and absence of credential-like files were verified on the exact candidate."
+    },
+    {
+      "id": "GPU-01",
+      "phase": "prepublish",
+      "area": "graphics",
+      "title": "Virtual and software renderer states are measured and reported honestly",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/live/graphics.txt",
+          "sha256": "ce8d132657775f35b49c87463e8635af084a04ae2686545e1038b321957a9dca"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/installed/graphics.txt",
+          "sha256": "01d65615dc3b0e1033661460e69a6a6edbb991f854b181b64c7a1b301b45d915"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/installed/passport.json",
+          "sha256": "81afcd166e05bb746e02fdbc77b6ae7bd9476c4c1be4ba5a997192603989be3a"
+        }
+      ],
+      "notes": "The exact candidate detected Virtio graphics in both live and installed systems and, because an authenticated hardware renderer could not be proven in the VM, System Passport reported Ready with a note instead of claiming acceleration."
+    },
+    {
+      "id": "GPU-02",
+      "phase": "prepublish",
+      "area": "graphics",
+      "title": "NVIDIA new-generation driver workflow and rollback path validate",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/gpu/gpu-02-simulation.log",
+          "sha256": "8b997e370db50eb951a062a21d3fe78fd2320e6c0e9dbc98c8646d93e32c90a7"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/gpu/gpu-02-physical-host.log",
+          "sha256": "d909cda6dfb8f0361d5dc3c5daea324adf5ccf44f8e895d59beef5b32a1e628d"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/gpu/gpu-02-upstream.log",
+          "sha256": "8723344eec8ce2423bd17cf5f803677692a4d0353e00491646291cbd490a372d"
+        },
+        {
+          "kind": "log",
+          "path": "candidate-phoenix-fix/gates/package-gate.log",
+          "sha256": "a6468e45ce68979076d1694c5b5e965ea48710b1a15e8bec8ecaa130fae39a20"
+        }
+      ],
+      "notes": "Fresh success and forced-failure simulations proved the NVIDIA selector, allowlisted open-driver install, Phoenix pre/post Point, and rollback guidance; the physical RTX 5060 Ti host showed an active NVIDIA kernel driver, and NVIDIA Debian 13 metadata verified with its signed keyring."
+    },
+    {
+      "id": "GPU-03",
+      "phase": "prepublish",
+      "area": "graphics",
+      "title": "AMD and Intel Mesa paths retain hardware rendering",
+      "required": false,
+      "status": "blocked",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/gpu/gpu-03-mesa-stack.txt",
+          "sha256": "784664dd16ab00993c0bf6010b5c6f36ae3edab9c19709a2e48bcc8b7aba4519"
+        }
+      ],
+      "notes": "Exact-candidate package audit proves the AMD and Intel Mesa, DRM, firmware, X.Org and kernel-module paths are present, GL dispatch remains on Mesa, and neither driver is locally blocked. The only active physical display controller available is the tested NVIDIA card; no active physical AMD or Intel renderer exists here, so hardware-renderer performance is intentionally not claimed. This case remains non-required."
+    },
+    {
+      "id": "RECOVERY-01",
+      "phase": "prepublish",
+      "area": "recovery",
+      "title": "Interrupted and removal-seeking updates recover through Phoenix snapshots",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/recovery/recovery-guest-test.log",
+          "sha256": "5dfa99fd8594d91f68c9338c3b99194ccf017e6ff17fddaa417df5e4faf8f111"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/recovery/phoenix-restore-prep.log",
+          "sha256": "1213cec99509ccb365c251658327d82a023f446a0bd5c6eb0ee3999bb4e0a63b"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/recovery/phoenix-restore.log",
+          "sha256": "6981c241acdea2ade39dfecb608ce508af1e8a95ad5af8c452f8e3fb7fbee88e"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/recovery/phoenix-restore-post-reboot.log",
+          "sha256": "1ae60bf82af3bf28a91f0535c1d30c4466e2e6c45b7ddde394ce607267587e04"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/recovery/phoenix-boot-id-before.txt",
+          "sha256": "b5674d52c825768f8733649da70019ebf8740e2d2c77c420c14c1adc7e47d0ad"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/recovery/phoenix-boot-id-after.txt",
+          "sha256": "5248426f6ad6027bc18fb78d3d03ed402d59bcce3c3f1efd4a2dd24365d0dfe6"
+        }
+      ],
+      "notes": "On an exact-candidate UEFI clone with separate /boot, a removal-seeking transaction was refused, an intentionally killed dpkg transaction was detected and repaired, and Phoenix Points were created. Point 5 then restored through the fixed atomic exchange, pinned a shared external-/boot kernel, rebooted successfully, rolled root state back, preserved changed @home data, removed post-snapshot root state, kept package health clean, and left zero failed units."
+    },
+    {
+      "id": "STRESS-01",
+      "phase": "prepublish",
+      "area": "stress",
+      "title": "Sustained CPU, memory, disk, network, model and Buzz load leaves a healthy system",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/stress/result.txt",
+          "sha256": "2f737b00865fcfe18e01fc693e82334364c1051c949cf5c1645a76128aa7f916"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/stress/worker-status.txt",
+          "sha256": "bcbcc21c2c1fa88ea5922c54756a9feecf2b1d7f3bd2634f30c7cf75c12d27e0"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/stress/stress-ng.log",
+          "sha256": "a81e994d79360b9726f4fea9c7e1b70ea999bce244ca66b267d0282bf12169d5"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/stress/monitor.log",
+          "sha256": "0c0dd503f9b8ebf5a9797c28438c2e42ef879147c9b911aa806a38f5b4476231"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/stress/health-after.txt",
+          "sha256": "7452539d24e25518a18ad2a28a5f46a259fea900d832887e275181ba404591b7"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/stress/model-response-031-attempt-1.json",
+          "sha256": "9ce6d17b6d47dac76e4711fa8c5fe0b6c6b81285f084353abe10265259396ae9"
+        },
+        {
+          "kind": "artifact",
+          "path": "final-848f04/uefi/stress-rerun.png",
+          "sha256": "57c10a198bb85e8e869f9099b2057eba47a7995acb10d34d78d57612209ff83d"
+        }
+      ],
+      "notes": "Six-minute combined soak completed with stress-ng CPU/memory/disk load, 31 successful real Gemma completions, 1,060 HTTP 206 virtual-network transfers, 171 Buzz/relay/model/desktop readiness cycles, no kernel OOM match, zero failed units, clean dpkg, loopback-only services and 13/13 healthy checks after cooldown."
+    },
+    {
+      "id": "STRESS-02",
+      "phase": "prepublish",
+      "area": "stress",
+      "title": "Repeated shutdown and reboot cycle completes without filesystem or service failures",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/reboot-cycles/cycle-summary.txt",
+          "sha256": "a4bcbc52f3b3e0730c95461f804f9ae64756608276c722e86ecd57c583776f6b"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/reboot-cycles/reboot-1.txt",
+          "sha256": "9e6c785b20cea3bde11e41bec2a1b164b6e4f05ac4a04f3b797db82939e4934b"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/reboot-cycles/reboot-2.txt",
+          "sha256": "f5945dd5402f13a691cf3e3583f32e0bed24d805112f4d4919a2d886d574ebfb"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/reboot-cycles/reboot-3.txt",
+          "sha256": "ee4a0ef002e0e146ddaf42624b2160808c66d5c9aa065997eea0b0d266873422"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/reboot-cycles/reboot-4.txt",
+          "sha256": "bcd462b56001ac374104832ffb4ce91ead32dc55ce6660ab3eb40a62553ddedb"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/reboot-cycles/reboot-5.txt",
+          "sha256": "697852ea5fddefcdd27139b1d5deba4688e20f4f3a48884a70c82227d6469a15"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/reboot-cycles/poweroff-1.txt",
+          "sha256": "9e5b93d303884c705b025610089f174032eb36a4527781e584c9b6dc85b62d21"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/reboot-cycles/poweroff-2.txt",
+          "sha256": "4c870ffec54bdce49635dc5084268ae0c5b48af41a1f0f77db93d9deb7622543"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/reboot-cycles/final-boot-screen.png",
+          "sha256": "6f8e7c623fca66b49613f911fb99e1bb7b2b3e7929820eafee71ce60b4638c4f"
+        }
+      ],
+      "notes": "Exact-candidate UEFI installation completed five warm reboots and two full ACPI poweroff/start cycles. All eight boot IDs were unique; every cycle had zero failed units, clean package state, read-write Btrfs root, zero device error counters, no filesystem/I/O/corruption journal matches, and a passing Shadowfetch health report. Exact-candidate legacy BIOS and encrypted boot coverage is retained separately in BOOT-01 and INSTALL-02."
+    },
+    {
+      "id": "UX-01",
+      "phase": "prepublish",
+      "area": "experience",
+      "title": "Keyboard navigation, scaling, resolutions and error recovery pass",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ux/ux-01-summary.txt",
+          "sha256": "9533f7394a5be947122245fc064334c713c8dc730a61b32ebe244f4caecb6dd9"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ux/keyboard-focus-traversal.txt",
+          "sha256": "a48f09be515da3196671e089f69c3f91a609844d2da87901539181aca67661c8"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ux/welcome-accessible-tree.txt",
+          "sha256": "ce51c62ad0fe4d023acfee46ae7d6ed24452e6635d5dffa257a86c02248f217e"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ux/profile-accessible-tree.txt",
+          "sha256": "5ccf81b082b7ef906410aa8e64a0d7579035f847f511a218a5b18091f02d47cc"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ux/kscreen-1024x768.txt",
+          "sha256": "558a6aa59af73d1599de5ef845e2e573df09c55ba3b76e6761337ec650879b16"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ux/kscreen-1920x1080-scale125.txt",
+          "sha256": "73403797ebe0adfca059667ed364fca17003f996fea47a61a3bf030c113d29eb"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ux/post-ux-health.txt",
+          "sha256": "bc66aec43a24e3e403f625cb1862e59979da9d324808acdfa51b3bf886a62ae7"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/ux/welcome-1280x800.png",
+          "sha256": "52fc115c3bcdf69cb5c6563c4bd64276c2f66588e3712cdf6b5fea96625bee20"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/ux/welcome-1920x1080-scale125.png",
+          "sha256": "ac00d472ee238e465d7cbaf3e133e228702eb19e6c8b2c4c68d1c2884a10227c"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/ux/profile-1920x1080-scale125.png",
+          "sha256": "cf3db6d9c4198513896286d75adfe45b34f310fa9a8fa84a9c15affe816dbd8e"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ai/offline-recovery-summary.txt",
+          "sha256": "34ac2fb174182147db4fb80031ff0e666b37e61d62424b999a3203fe0d511a44"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/ai/failure-paths/low-disk.log",
+          "sha256": "85568ebdade92ad12c0b63e74a52dcffbf21707249315b4b027906d57e1d493c"
+        }
+      ],
+      "notes": "Exact-candidate Wayland session passed named AT-SPI traversal and keyboard activation, rendered cleanly at 1024x768/100%, 1280x800/100%, and 1920x1080/125%, restored its baseline, and retained zero failed units with clean dpkg. Recovery evidence includes a real network interruption without false success, a disclosed clean retry, cancellation, low-disk refusal before privilege, and pre-apt checksum rejection."
+    },
+    {
+      "id": "UX-02",
+      "phase": "prepublish",
+      "area": "experience",
+      "title": "Fresh final screenshots pass visual QA without overlap or stale branding",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/final-screenshots/visual-qa.txt",
+          "sha256": "f2031c720f074ee6be09078f718f3ce27a387ac902b21005b6fc0a992dd3429a"
+        },
+        {
+          "kind": "log",
+          "path": "final-848f04/uefi/final-screenshots/ocr-scan.txt",
+          "sha256": "e1a56d991962515b9f0ae8b83b6e90d12dd7154cc57f232f0f5e498ad6a5cb99"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/01-desktop.png",
+          "sha256": "39c20b8e506d5cd601ed0416e6cdd7aaec5360b1c993cb9d3677475e61f0849e"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/02-welcome-2.1.5.png",
+          "sha256": "ac00d472ee238e465d7cbaf3e133e228702eb19e6c8b2c4c68d1c2884a10227c"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/03-setup-profiles.png",
+          "sha256": "cf3db6d9c4198513896286d75adfe45b34f310fa9a8fa84a9c15affe816dbd8e"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/04-ai-workspace-buzz-coding-tools.png",
+          "sha256": "63c52e72bc70d9a888b7bfb0b14fb9bef07a64dc9abd56ff951f549ab74c834e"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/05-five-tools-ready.png",
+          "sha256": "a2be50bc161647726cdff2d8451970baf6043ac16728c79f9c256e9ab8f60606"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/06-system-passport.png",
+          "sha256": "16459aa7b33eb4634152f4dd1ef38bb04e11ea05c113e73f964eae3306e4f2b6"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/07-local-ai-control-center.png",
+          "sha256": "203f0bd0409ca746a58d7d1ecc19af2ed4fea9a588c5d2baf8985da03afc4ec4"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/08-buzz-model-ready.png",
+          "sha256": "1d39731db19610f3b3bd86120f96574b1e71d2673143ed3a8cb1d6a87777d870"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/09-installer-welcome.png",
+          "sha256": "bfe24d373008c1450536ff95d6f81c7acc35088a778f2b8f5c22ec9acf0929f3"
+        },
+        {
+          "kind": "screenshot",
+          "path": "final-848f04/uefi/final-screenshots/10-installer-summary.png",
+          "sha256": "697fa5e7fb193962059324209bab852874c71dfd29b060297dd9fa55e99fb20f"
+        }
+      ],
+      "notes": "Ten exact-candidate screenshots passed manual and OCR review. Primary editorial frames are native 1920x1080 captures; every recorded image is at least 1280x720. No clipping, overlap, stale 2.1.3/2.1.4, OpenClaw, Hermes or Ollama branding was found. The set includes native Buzz model readiness and the selected Buzz/Codex/Claude/Grok/Cursor installer screen."
+    },
+    {
+      "id": "REL-01",
+      "phase": "prepublish",
+      "area": "release",
+      "title": "Release dossier, package inventory, SBOM and evidence bundle verify",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "report",
+          "path": "release-2.1.5/dossier-2.1.5.md",
+          "sha256": "8378656e818cfd7e5489093fb28746b761fedb949652154436aebf512588e82b"
+        },
+        {
+          "kind": "report",
+          "path": "release-2.1.5/evidence-bundle-2.1.5.tar.gz",
+          "sha256": "7b4737416759436567bac1224a8722c46e1d675d74fe7a1e9f51eaf16fc436fe"
+        },
+        {
+          "kind": "report",
+          "path": "release-2.1.5/sbom-2.1.5.cdx.json",
+          "sha256": "8f81b70551844f2118b886656237a040231d7ed6989ea9d11a7e38f342142fcf"
+        },
+        {
+          "kind": "report",
+          "path": "release-2.1.5/packages-2.1.5.manifest",
+          "sha256": "663f336c3b440dfc71fbe008d18416d04eb65a7cf64aaaf9af883c4f2a04a2b3"
+        }
+      ],
+      "notes": "Release dossier, CycloneDX SBOM (3342 components), 15-binary/13-source package manifest and evidence bundle regenerated against the rebuilt exact 848f04 candidate; bundle sha256 recorded in artifact.evidence_bundle_sha256."
+    },
+    {
+      "id": "CANON-01",
+      "phase": "prepublish",
+      "area": "release",
+      "title": "Canonical website and GitHub links resolve without changing the verified APT and download backend",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "report",
+          "path": "web-2.1.5/canonical-links.txt",
+          "sha256": "af7b39e8bc0d7626bc87783f4f93d3e407d7fd8bc763633ff990c999a0c4c5aa"
+        }
+      ],
+      "notes": "Human pages are canonical on www.shadowfetchlinux.org; ISO bytes, detached signature, GPG key and checksum sidecar remain on the frozen www.shadowfetch.com/linux backend. No APT or download route changed."
+    },
+    {
+      "id": "WEB-01",
+      "phase": "prepublish",
+      "area": "website",
+      "title": "Staged shadowfetchlinux.org release pages preserve current UX and accurately present 2.1.5",
+      "required": true,
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "report",
+          "path": "web-2.1.5/web-staging-report.txt",
+          "sha256": "0d30ae95e090aa7c6680695df4905c11f5364370aa6b30fa8908bfacf94b0498"
+        }
+      ],
+      "notes": "shadowfetch-linux-site rebuilt with releases/2.1.5.json (newest-date-wins), six fresh 2.1.5 screenshots from the final ISO, a Buzz top-nav entry, and version/checksum/filename updated across verify, download, screenshots, changelog and known-issues. astro check: 0 errors; 21 pages built."
+    },
+    {
+      "id": "PUB-01",
+      "phase": "postpublish",
+      "area": "publication",
+      "title": "GitHub, shadowfetchlinux.org and Archive.org expose the approved 2.1.5 release",
+      "required": true,
+      "status": "pending",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "PUB-02",
+      "phase": "postpublish",
+      "area": "publication",
+      "title": "Fresh public downloads, checksum, signature, metadata and rollback URLs verify",
+      "required": true,
+      "status": "pending",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "PUB-03",
+      "phase": "postpublish",
+      "area": "publication",
+      "title": "Public Linux page displays approved 2.1.5 screenshots from the final ISO",
+      "required": true,
+      "status": "pending",
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "PUB-04",
+      "phase": "postpublish",
+      "area": "publication",
+      "title": "Public top navigation exposes Buzz and opens the official Block repository",
+      "required": true,
+      "status": "pending",
+      "evidence": [],
+      "notes": ""
+    }
+  ]
+}

@@ -1,3 +1,9 @@
+shadowfetch-phoenix (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild Phoenix snapshot and recovery integration for 2.1.5.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-phoenix (2.1.4-1) umbra; urgency=medium
 
   * Rebuild Phoenix recovery integration for the 2.1.4 Fire Edition.

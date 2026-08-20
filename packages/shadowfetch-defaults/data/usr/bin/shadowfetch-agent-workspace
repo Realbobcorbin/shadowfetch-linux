@@ -24,7 +24,7 @@ WHAT IT DOES
   SHADOWFETCH_AGENT_WORKSPACES). Each gets its own instructions, tasks
   and safety rules.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/
 SFHELP
     exit 0 ;;
   --version)

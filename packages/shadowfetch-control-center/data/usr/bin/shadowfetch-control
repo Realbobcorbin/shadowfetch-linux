@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Shadowfetch Control Center - one window runs the machine.
 
-2.1.4 "Fire Edition": six fixed sections - Ignite (Ember Mode), Watch
-(Firewatch), Recover (Phoenix), Local AI, Drivers, and Software & Updates.
+2.1.5 "Fire Edition": seven fixed sections - Guide (System Passport), Ignite
+(Ember Mode), Watch (Firewatch), Recover (Phoenix), Local AI, Drivers, and
+Software & Updates.
 The system tools (Safe Update, System Health, AI Workspaces, Local AI Tools,
 First-run Setup, Graphics & Recovery) all remain reachable inside their
 sections; nothing the old front door offered has been removed.
@@ -24,6 +25,7 @@ USAGE
   shadowfetch-control --cli              text-mode menu (no graphics needed)
 
 SECTIONS (for --page; a tab may follow after a colon)
+  guide      Private, read-only System Passport (aliases: passport)
   ignite      Ember Mode - one switch for speed, always returns to Balanced
   watch       Firewatch - live sensors, the heat map, local model telemetry
   recover     Phoenix - restore Points, repair tools, recovery report
@@ -34,11 +36,11 @@ SECTIONS (for --page; a tab may follow after a colon)
   Examples: --page watch:heatmap    --page recover:point=42
 
 WHAT IT DOES
-  A front end to speed, visibility, recovery, updates and local AI.
+  A front end to compatibility, speed, visibility, recovery, updates and local AI.
   Actions are confirmed; privileged steps go through polkit. If a Control
   Center window is already open, --page routes inside that window.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/""")
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/""")
     raise SystemExit(0)
 if "--version" in _sfsys.argv[1:]:
     print("shadowfetch-control (Shadowfetch Linux) " + (open("/usr/share/shadowfetch/version").read().strip() if _sfsos.path.exists("/usr/share/shadowfetch/version") else "unknown"))
@@ -57,16 +59,17 @@ def cli() -> int:
     """Text-mode fallback, kept from 2.1.1 so a broken desktop still has a
     front door to every tool."""
     print("Shadowfetch Control Center")
-    print("  1) Safe Update")
-    print("  2) System Health")
-    print("  3) AI Workspaces")
-    print("  4) Local AI Tools")
-    print("  5) Graphics & Recovery")
+    print("  1) System Passport")
+    print("  2) Safe Update")
+    print("  3) System Health")
+    print("  4) AI Workspaces")
+    print("  5) Local AI Tools")
+    print("  6) Graphics & Recovery")
     try:
-        choice = input("Choose [1-5]: ").strip()
+        choice = input("Choose [1-6]: ").strip()
     except EOFError:
         return 0
-    commands = {"1": "shadowfetch-update", "2": "shadowfetch-health", "3": "shadowfetch-agent-workspace", "4": "shadowfetch-agent-tools", "5": "shadowfetch-recovery"}
+    commands = {"1": "shadowfetch-passport", "2": "shadowfetch-update", "3": "shadowfetch-health", "4": "shadowfetch-agent-workspace", "5": "shadowfetch-agent-tools", "6": "shadowfetch-recovery"}
     command = commands.get(choice)
     return subprocess.call(command) if command else 0
 

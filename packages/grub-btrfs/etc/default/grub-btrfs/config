@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Shadowfetch Linux 2.1.4 "Fire Edition" configuration for grub-btrfs
+# Shadowfetch Linux 2.1.5 "Fire Edition" configuration for grub-btrfs
 # (in-house package grub-btrfs 4.14-2). Sourced by 41_snapshots-btrfs.
 # This file is a conffile: local edits survive upgrades.
 

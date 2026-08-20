@@ -2,7 +2,7 @@
 # Verified setup and launcher for official Buzz Desktop and its private relay.
 set -euo pipefail
 
-BUZZ_VERSION="0.5.8"
+BUZZ_VERSION="0.5.17"
 BUZZ_IMAGE="ghcr.io/block/buzz@sha256:4e31b7c7abb7d00b6f513dc559e58d2b980416f1dc400aa01bcf762cf2989cfc"
 RELAY_URL="ws://127.0.0.1:3000"
 RELAY_HTTP="http://127.0.0.1:3000"
@@ -60,7 +60,8 @@ port_in_use() {
 }
 
 ensure_user_service_bus() {
-    local runtime_dir="/run/user/$(id -u)"
+    local runtime_dir
+    runtime_dir="/run/user/$(id -u)"
 
     # Graphical launches already have these. A terminal/SSH launch for the
     # logged-in desktop user needs the same user-manager endpoint explicitly.
@@ -71,6 +72,16 @@ ensure_user_service_bus() {
         export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
     fi
     [[ -n "${XDG_RUNTIME_DIR:-}" && -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]]
+}
+
+prepare_buzz_rendering() {
+    # WebKitGTK's DMA-BUF renderer can freeze Buzz on Plasma Wayland. Prefer
+    # the current shared-memory fallback while preserving explicit overrides.
+    if [[ -n "${WAYLAND_DISPLAY:-}" \
+        && -z "${WEBKIT_DMABUF_RENDERER_FORCE_SHM+x}" \
+        && -z "${WEBKIT_DISABLE_DMABUF_RENDERER+x}" ]]; then
+        export WEBKIT_DMABUF_RENDERER_FORCE_SHM=1
+    fi
 }
 
 relay_ready() {
@@ -84,7 +95,7 @@ compute_ready() {
 preflight() {
     local available port_state="available" compute_state="available"
     [[ $(uname -m) == "x86_64" ]] || {
-        warn "Shadowfetch Fire Edition 2.1.4 supports x86_64 systems only."
+        warn "Shadowfetch Fire Edition 2.1.5 supports x86_64 systems only."
         return 1
     }
     for command in podman podman-compose curl ss flock; do
@@ -300,6 +311,7 @@ cmd_open() {
     fi
     prepare_first_owner
     export BUZZ_RELAY_URL="$RELAY_URL"
+    prepare_buzz_rendering
     exec buzz-desktop
 }
 
@@ -308,9 +320,9 @@ cmd_status() {
     if command -v buzz-desktop >/dev/null 2>&1; then ok "Buzz Desktop is installed."; else warn "Buzz Desktop is not installed."; fi
     if relay_ready; then ok "Relay ready at $RELAY_URL (loopback only)."; else warn "Relay is not ready."; fi
     if [[ -r "$DATA_DIR/.env" ]] && grep -Fxq "BUZZ_IMAGE=$BUZZ_IMAGE" "$DATA_DIR/.env"; then
-        ok "Relay image matches the 2.1.4 release pin."
+        ok "Relay image matches the 2.1.5 release pin."
     elif [[ -e "$DATA_DIR/.env" ]]; then
-        warn "Relay configuration is older than the 2.1.4 image pin; rerun setup."
+        warn "Relay configuration is older than the 2.1.5 image pin; rerun setup."
     fi
     if compute_ready; then
         ok "Buzz shared compute is active on 127.0.0.1:9337."

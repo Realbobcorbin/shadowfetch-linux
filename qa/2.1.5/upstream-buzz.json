@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "verified_at": "2026-08-19T09:01:27Z",
+  "upstream": "https://github.com/block/buzz",
+  "tag": "desktop-v0.5.17",
+  "commit": "c3bfd66947978fae93f4cfb46bea98ba20e32ccf",
+  "asset": {
+    "url": "https://github.com/block/buzz/releases/download/desktop-v0.5.17/Buzz_0.5.17_amd64.deb",
+    "sha256": "cf28de6ba023fdb6eb676f183579e1df4d83bc29b4ebfa6c26ad8e3f327e0fef"
+  },
+  "debian_contract": {
+    "package": "buzz",
+    "version": "0.5.17",
+    "architecture": "amd64",
+    "required_binaries": [
+      "/usr/bin/buzz",
+      "/usr/bin/buzz-agent",
+      "/usr/bin/buzz-desktop"
+    ]
+  },
+  "release_build": {
+    "workflow": ".github/workflows/release.yml",
+    "linux_features": [
+      "mesh-llm"
+    ]
+  },
+  "binary_evidence": {
+    "contains": [
+      "mesh-llm-host-runtime/src/runtime/control_loop.rs",
+      "mesh-llm-host-runtime/src/runtime/startup_models.rs"
+    ]
+  },
+  "relay": {
+    "tag": "0.2.1",
+    "commit": "6e5c462ac524de60d7edb46c66130fd779cc9006",
+    "manifest_sha256": "4e31b7c7abb7d00b6f513dc559e58d2b980416f1dc400aa01bcf762cf2989cfc",
+    "amd64_image_sha256": "848fbf014382f152f126af5c85437cdcbe4f205126ef9a89f5f0133a421a2cfa"
+  }
+}

@@ -27,7 +27,7 @@ phoenix-postboot - post-restore boot pass (run by systemd on every boot).
 USAGE
   phoenix-postboot     run update-grub if flagged; GC @_prev/@new leftovers
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/
 SFHELP
     exit 0 ;;
   --version)

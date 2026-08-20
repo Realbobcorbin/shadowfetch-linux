@@ -28,7 +28,7 @@ WHAT IT DOES
   Updates warn before removing anything, wrap themselves in a Phoenix
   Point, and verify the system afterward.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/"""
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/"""
 
 if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
     print(USAGE)

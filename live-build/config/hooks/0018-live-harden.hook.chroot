@@ -44,7 +44,7 @@ fi
 cat > /etc/systemd/system/shadowfetch-live-nossh.service <<'EOF'
 [Unit]
 Description=Disable sshd on a live session (published live password)
-Documentation=https://www.shadowfetch.com/linux
+Documentation=https://www.shadowfetchlinux.org/
 ConditionPathExists=/run/live/medium
 Before=ssh.service ssh.socket
 DefaultDependencies=no

@@ -30,7 +30,7 @@ WHAT IT DOES
   Phoenix Point (via snapper's own apt hooks - never its own snapshots),
   verifies the system afterward, and offers one rollback button.
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/""")
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/""")
     raise SystemExit(0)
 if "--version" in _sfsys.argv[1:]:
     print("shadowfetch-fireproof (Shadowfetch Linux) " + (open("/usr/share/shadowfetch/version").read().strip() if _sfsos.path.exists("/usr/share/shadowfetch/version") else "unknown"))

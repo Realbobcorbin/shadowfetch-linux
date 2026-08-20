@@ -1,3 +1,10 @@
+shadowfetch-hwscan (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild read-only hardware capability reporting for 2.1.5.
+  * Isolate vulkaninfo JSON output so scans leave no profile file behind.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-hwscan (2.1.4-1) umbra; urgency=medium
 
   * Rebuild hardware capability reporting for the new graphics setup flow and

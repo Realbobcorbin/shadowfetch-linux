@@ -48,9 +48,9 @@ ID_LIKE=debian
 VERSION="${SFVER} (Umbra)"
 VERSION_ID="${SFVER}"
 VERSION_CODENAME=umbra
-HOME_URL="https://www.shadowfetch.com/linux/"
-SUPPORT_URL="https://www.shadowfetch.com/linux/"
-BUG_REPORT_URL="https://www.shadowfetch.com/linux/"
+HOME_URL="https://www.shadowfetchlinux.org/"
+SUPPORT_URL="https://www.shadowfetchlinux.org/"
+BUG_REPORT_URL="https://www.shadowfetchlinux.org/"
 LOGO=shadowfetch
 EOF
 

@@ -1,3 +1,10 @@
+shadowfetch-menus (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild the seven-section Fire Edition launcher for 2.1.5.
+  * Keep one predictable Local AI section led by Buzz.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-menus (2.1.4-1) umbra; urgency=high
 
   * Keep the seven-section Fire Edition launcher while replacing AI and Agents

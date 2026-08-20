@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Shadowfetch Project <signing@shadowfetch.com>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
-Homepage: https://shadowfetch.com/linux/
+Homepage: https://www.shadowfetchlinux.org/
 
 Package: shadowfetch-phoenix
 Architecture: all
@@ -21,7 +21,7 @@ Recommends:
  smartmontools,
  inxi
 Description: Shadowfetch Phoenix Recovery (safety pillar)
- Phoenix Recovery for Shadowfetch Linux 2.1.2 "Fire Edition". On a Btrfs
+ Phoenix Recovery for Shadowfetch Linux 2.1.5 "Fire Edition". On a Btrfs
  root it arms snapper at first boot (so Debian snapper's shipped 80snapper
  apt hook wraps every dpkg run in pre/post Phoenix Points), keeps free
  space ahead of package transactions (79phoenix-space, sorted before

@@ -10,9 +10,12 @@
 #   make distclean  Wipe everything regenerable
 
 SHELL := /bin/bash
-VERSION  ?= 2.1.4
+VERSION  ?= 2.1.5
 CODENAME ?= umbra
 ISO_NAME := shadowfetch-$(VERSION)-amd64.iso
+VERSION_TOKEN := $(subst .,_,$(VERSION))
+PUBLIC_SITE ?= https://www.shadowfetchlinux.org
+ARTIFACT_BASE ?= https://www.shadowfetch.com/linux
 
 # Real source packages — each has its own debian/ tree.
 # shadowfetch-meta builds two metapackages plus the upgrade-compatible,
@@ -57,7 +60,13 @@ REPO_DIR  := $(ROOT)/repo
 LB_DIR    := $(ROOT)/live-build
 LB_BUILD_LOG := $(BUILD_DIR)/live-build-$(VERSION).log
 LB_BUILD_MARKER := $(BUILD_DIR)/.live-build-$(VERSION)-started
-ISO_GATE_LOG := $(ROOT)/work/qa-2.1.4/evidence/iso/iso-gate.log
+QA_EVIDENCE_DIR := $(ROOT)/work/qa-$(VERSION)/evidence
+ISO_GATE_LOG := $(QA_EVIDENCE_DIR)/iso/iso-gate.log
+SOURCE_GATE := $(ROOT)/tools/source_gate_$(VERSION_TOKEN).py
+PACKAGE_GATE := $(ROOT)/tools/package_gate_$(VERSION_TOKEN).py
+ISO_GATE := $(ROOT)/tools/iso_gate_$(VERSION_TOKEN).py
+ACCEPTANCE_TOOL := $(ROOT)/tools/verify_acceptance_$(VERSION_TOKEN).py
+ACCEPTANCE_MANIFEST := $(ROOT)/qa/$(VERSION)/acceptance.json
 RELEASE_DEBS := $(BUILD_DIR)/*_$(VERSION)-1_all.deb $(BUILD_DIR)/*_$(VERSION)-1_amd64.deb $(BUILD_DIR)/grub-btrfs_*_all.deb
 PACKAGES_STAMP := $(BUILD_DIR)/.packages-$(VERSION)
 
@@ -71,7 +80,7 @@ R2_REGION   ?= auto
 LINUX_HOST ?= shadowfetch-linux
 LINUX_PATH ?= ~/projects/shadowfetch
 
-.PHONY: all help test source-gate package-gate iso-gate deps packages repo iso sign pre-release-check publish qemu clean distclean \
+.PHONY: all help test source-gate package-gate iso-gate acceptance-audit deps packages repo iso sign pre-release-check publish qemu clean distclean \
         sync-from-linux deploy-worker ship stamp-version
 
 all: iso
@@ -83,6 +92,7 @@ help:
 	@echo "  make source-gate Run tests, parsers, linters and secret scans"
 	@echo "  make package-gate Validate packages, signed repo and clean install"
 	@echo "  make iso-gate   Validate the signed hybrid ISO and installed-image payload"
+	@echo "  make acceptance-audit Validate the current release manifest and pending evidence"
 	@echo "  make packages   Build all .deb packages"
 	@echo "  make repo       Build local APT repository"
 	@echo "  make iso        Build the bootable ISO (requires sudo)"
@@ -98,10 +108,17 @@ test:
 	python3 -m unittest discover -s tools/tests -v
 
 source-gate:
-	$(ROOT)/tools/source_gate_2_1_4.py
+	@test -x $(SOURCE_GATE) || { echo "Missing source gate: $(SOURCE_GATE)" >&2; exit 1; }
+	$(SOURCE_GATE)
 
 package-gate: repo
-	$(ROOT)/tools/package_gate_2_1_4.py
+	@test -x $(PACKAGE_GATE) || { echo "Missing package gate: $(PACKAGE_GATE)" >&2; exit 1; }
+	$(PACKAGE_GATE)
+
+acceptance-audit:
+	@test -x $(ACCEPTANCE_TOOL) || { echo "Missing acceptance tool: $(ACCEPTANCE_TOOL)" >&2; exit 1; }
+	@test -f $(ACCEPTANCE_MANIFEST) || { echo "Missing acceptance manifest: $(ACCEPTANCE_MANIFEST)" >&2; exit 1; }
+	$(ACCEPTANCE_TOOL) --manifest $(ACCEPTANCE_MANIFEST) verify --allow-pending
 
 deps:
 	sudo apt-get update
@@ -277,7 +294,8 @@ iso: repo
 
 iso-gate:
 	@mkdir -p $(dir $(ISO_GATE_LOG))
-	@set -o pipefail; $(ROOT)/tools/iso_gate_2_1_4.py 2>&1 | tee $(ISO_GATE_LOG)
+	@test -x $(ISO_GATE) || { echo "Missing ISO gate: $(ISO_GATE)" >&2; exit 1; }
+	@set -o pipefail; $(ISO_GATE) 2>&1 | tee $(ISO_GATE_LOG)
 
 # Detached GPG signature so downloaders can verify with: gpg --verify <iso>.asc
 sign:
@@ -314,8 +332,9 @@ publish: pre-release-check
 	@echo ">>> Uploading ISO ($(ISO_NAME), $$(du -h $(ROOT)/$(ISO_NAME) | cut -f1), multipart). Progress below."
 	@aws --endpoint-url=$(R2_ENDPOINT) --region=$(R2_REGION) s3 cp $(ROOT)/$(ISO_NAME) s3://$(R2_BUCKET)/releases/$(ISO_NAME) --content-type "application/x-iso9660-image"
 	@echo ">>> Done. Verify:"
-	@echo "    curl -I  https://shadowfetch.com/linux/download/$(ISO_NAME)"
-	@echo "    curl -sI https://shadowfetch.com/linux/apt/dists/$(CODENAME)/InRelease"
+	@echo "    open $(PUBLIC_SITE)/"
+	@echo "    curl -I  $(ARTIFACT_BASE)/download/$(ISO_NAME)"
+	@echo "    curl -sI $(ARTIFACT_BASE)/apt/dists/$(CODENAME)/InRelease"
 
 qemu:
 	qemu-system-x86_64 \
@@ -350,9 +369,9 @@ deploy-worker:
 ship: sync-from-linux publish deploy-worker
 	@echo ""
 	@echo ">>> SHIPPED. Verify:"
-	@echo "    open https://shadowfetch.com/linux/"
-	@echo "    curl -I https://shadowfetch.com/linux/download/$(ISO_NAME)"
-	@echo "    curl -sI https://shadowfetch.com/linux/apt/dists/$(CODENAME)/InRelease"
+	@echo "    open $(PUBLIC_SITE)/"
+	@echo "    curl -I $(ARTIFACT_BASE)/download/$(ISO_NAME)"
+	@echo "    curl -sI $(ARTIFACT_BASE)/apt/dists/$(CODENAME)/InRelease"
 
 clean:
 	-cd $(LB_DIR) && sudo lb clean

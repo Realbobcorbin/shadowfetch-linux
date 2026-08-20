@@ -1,3 +1,10 @@
+shadowfetch-firewatchd (2.1.5-1) umbra; urgency=medium
+
+  * Rebuild bounded hardware and Buzz loopback telemetry for 2.1.5.
+  * Keep prompt contents, credentials, and job data outside telemetry.
+
+ -- Shadowfetch Project <shadowfetchlinux@gmail.com>  Tue, 18 Aug 2026 18:04:54 -0400
+
 shadowfetch-firewatchd (2.1.4-1) umbra; urgency=medium
 
   * Replace retired per-workspace llama-server discovery with a bounded,

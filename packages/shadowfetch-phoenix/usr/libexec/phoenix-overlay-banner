@@ -22,7 +22,7 @@ phoenix-overlay-banner - notify when running a "Last Known Good Flame" session.
 USAGE
   phoenix-overlay-banner    show the overlay-session banner if applicable
 
-Part of Shadowfetch Linux. https://shadowfetch.com/linux/
+Part of Shadowfetch Linux. https://www.shadowfetchlinux.org/
 SFHELP
     exit 0 ;;
   --version)

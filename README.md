@@ -19,6 +19,15 @@ It is an independent derivative that **builds on Debian rather than replacing it
 > - Signing-key fingerprint: `8F13 CE15 35EE 1F4A 2916  A1F7 3C5C 900B 7BE8 0CA1`
 > - Base: Debian testing · Desktop: KDE Plasma 6 · Boot: BIOS + UEFI (hybrid ISO)
 
+> **Development branch:** 2.1.5 Fire Edition. It is not released and has no
+> final ISO hash yet; progress is tracked in
+> [`docs/RELEASE-2.1.5.md`](docs/RELEASE-2.1.5.md).
+>
+> Its headline candidates are **Shadowfetch Guide**, a local-only System
+> Passport that checks what works without uploading machine identity, and a
+> first-run choices to install **OpenAI Codex CLI, Anthropic Claude Code, xAI
+> Grok Build, or Cursor Agent** beside the private Buzz and open-model path.
+
 ---
 
 ## Who it's for
@@ -42,7 +51,9 @@ Shadowfetch Linux is young and honest about its rough edges. If you want a borin
 | **Phoenix Recovery** | Automatic **Btrfs restore points before every update, driver install and AI-stack change**, restorable in one click; GRUB snapshot-boot for recovery. |
 | **Fireproof Updates** | Updates are **simulated and re-verified before applying**; they refuse to run on low disk, an active package manager, or bad power; they take a pre/post snapshot pair and offer rollback if verification fails. |
 | **Ignition Setup** | First-boot system chooser: Core / Creator / Developer / AI Workstation / Full Flame. |
+| **Shadowfetch Guide (2.1.5 candidate)** | A read-only System Passport that explains graphics, network, audio, firmware, recovery and local-AI readiness before installation, then routes highlighted checks to the existing safe repair tools afterward. |
 | **Local AI via Buzz** | Opt-in and **consent-gated**. Buzz surveys the hardware, recommends an open model, downloads it **only after confirmation**, and serves it on a **loopback-only** shared-compute endpoint. Nothing is fetched until you confirm in Settings → Compute. (2.1.4 verifies Buzz Desktop 0.5.8 by SHA-256 before installing.) |
+| **Optional coding agents (2.1.5 candidate)** | Four unchecked first-run choices install release-pinned Codex, Claude Code, Grok Build, or Cursor Agent for the desktop user. Every selected artifact is verified independently; each tool owns its sign-in, and no account credential is embedded in or copied by Shadowfetch. |
 | **NVIDIA graphics path** | 2.1.4 verifies NVIDIA's Debian 13 keyring and uses `nvidia-driver-assistant` with **simulate-first, `--no-remove`, and Phoenix snapshots** — validated against a physical RTX 5060 Ti. Intel/AMD use the normal Mesa stack. |
 | **Browser Migration** | Validates bookmark-HTML and password-CSV exports before staging/import. (Never attach a password CSV to a bug report.) |
 | **Signed everything** | Signed ISO, signed reprepro APT repo, public signing key, public verification instructions. |
@@ -114,7 +125,7 @@ The ISO boots a live KDE session as the user `shadow` (password `shadow`, passwo
 Shadowfetch Linux is assembled with **Debian live-build** plus a set of in-house Debian packages and a signed **reprepro** APT repository.
 
 ```
-shadowfetch-distro-source/
+shadowfetch-linux/
 ├── Makefile                 # orchestrates the whole build (deps → packages → repo → iso → qemu)
 ├── live-build/config/       # live-build definition: package lists, hooks, installer (Calamares) helpers
 ├── packages/                # the in-house .deb sources (built with dpkg-buildpackage)
@@ -132,14 +143,17 @@ shadowfetch-distro-source/
 │   ├── shadowfetch-menus         # curated application menu
 │   └── grub-btrfs                # snapshot boot entries
 ├── repo/conf/distributions  # reprepro config (suite "umbra", SignWith fingerprint)
-├── tools/                   # release/ISO gates + tests (e.g. iso_gate_2_1_4.py)
+├── tools/                   # release/ISO gates + tests (e.g. iso_gate_2_1_5.py)
 ├── web/shadowfetch-linux-worker/  # Cloudflare Worker for /linux site + download/APT proxy
 ├── docs/                    # RELEASE-*.md, FIRE_ROADMAP.md, source/claim docs
 ├── branding/ · artwork/     # Umbra visual identity (see Licensing)
 └── qa/                      # per-release acceptance manifests + evidence
 ```
 
-The finished ISO is a **hybrid amd64 image** bootable on both BIOS and UEFI. Releases are published to Cloudflare R2 and `www.shadowfetch.com/linux`, and mirrored to archive.org.
+The finished ISO is a **hybrid amd64 image** bootable on both BIOS and UEFI.
+Release pages live at `www.shadowfetchlinux.org`; verified ISO and APT objects
+remain on the existing R2-backed routes until replacement raw endpoints pass
+the release acceptance checks. Releases are also mirrored to Archive.org.
 
 ---
 
@@ -157,7 +171,8 @@ make qemu       # boot the freshly built ISO in QEMU to smoke-test it
 
 Useful targets: `make source-gate` (tests, parsers, linters, secret scans), `make iso-gate` (post-build ISO inventory checks), `make sign` (detached GPG signature), `make qemu`.
 
-Version is controlled by the Makefile: `VERSION ?= 2.1.4` and `CODENAME ?= umbra`. Override on the command line, e.g. `make iso VERSION=2.1.5`.
+Version is controlled by the Makefile: `VERSION ?= 2.1.5` and `CODENAME ?= umbra`.
+Override it on the command line only when deliberately testing another release.
 
 > **Signing/publishing** (ISO signature, APT repo signature, R2/Worker deploy) requires the Shadowfetch private signing key and Cloudflare/R2 credentials, which are **not** in this repo — they live in the maintainer's build-host keyring and in CI secrets. See `.github/CI-SECRETS.md` for the CI secret names. Contributors can build and QEMU-test an unsigned ISO without any of that.
 
@@ -173,7 +188,7 @@ See [`SECURITY.md`](SECURITY.md), the [security model](https://www.shadowfetchli
 
 ## Support & contributing
 
-- **GitHub Issues** — bugs, installation reports, hardware notes, and patches: https://github.com/Realbobcorbin/shadowfetch-linux/issues
+- **GitHub Issues** — bugs, installation reports, hardware notes, and patches: https://github.com/ShadowfetchLinux/shadowfetch-linux/issues
 
 A good **bug report** includes: exact ISO filename and whether the checksum matched; UEFI vs legacy BIOS and Secure Boot state; CPU/GPU/RAM/disk layout/Wi-Fi chipset; for installer failures, where Calamares stopped and whether the live session worked; and redacted `shadowfetch-health --json` output.
 
@@ -194,6 +209,6 @@ Shadowfetch Linux is an **aggregate**: the ISO bundles many upstream Debian pack
 
 ## Release notes & links
 
-- Latest: [`docs/RELEASE-2.1.4.md`](docs/RELEASE-2.1.4.md) · prior: `docs/RELEASE-2.1.1.md`, `docs/RELEASE-2.0.0.md`, `docs/RELEASE-1.9.0.md`
+- Stable: [`docs/RELEASE-2.1.4.md`](docs/RELEASE-2.1.4.md) · in development: [`docs/RELEASE-2.1.5.md`](docs/RELEASE-2.1.5.md)
 - [Download](https://www.shadowfetchlinux.org/download) · [Verify](https://www.shadowfetchlinux.org/verify) · [Install](https://www.shadowfetchlinux.org/install) · [Security](https://www.shadowfetchlinux.org/security) · [Known issues](https://www.shadowfetchlinux.org/known-issues) · [Docs](https://www.shadowfetchlinux.org/docs)
 - Changelog / release feed: https://www.shadowfetchlinux.org/releases.json

@@ -9,10 +9,13 @@ A small, focused PyQt6 wizard that:
     an offline save-your-choice path, and automatic Phoenix Point protection
     around every install
   - Welcomes the user to Shadowfetch Linux
+  - Opens Shadowfetch Guide for a private pre-install System Passport
   - Lets them choose a role-based setup profile to preselect useful apps
   - Lets them pick a signature accent colour (applied to KDE Plasma 6)
   - Offers a curated set of optional apps to install from Flathub
   - Offers Buzz; Buzz ranks and downloads open models in its Compute settings
+  - Offers verified, user-level installs of Codex, Claude Code, Grok Build,
+    and Cursor Agent
   - Offers the one-click software catalog (media apps, presets, local AI)
 
 Honest, fast, private, AI-ready - built on Debian + KDE Plasma 6.
@@ -61,7 +64,8 @@ if __name__ == "__main__" and {"-h", "--help", "--version"}.intersection(sys.arg
             "A graphical wizard that runs on login. Until a bundle choice is made it\n"
             "opens on the Ignition Setup page (Core / Creator / Developer / AI\n"
             "Workstation / Full Flame); afterwards it runs the one-time welcome flow\n"
-            "(profile, graphics, desktop, apps and optional Buzz) and then\n"
+            "(profile, graphics, desktop, apps, optional Buzz and coding agents)\n"
+            "and then\n"
             "exits silently on later logins. Every download remains opt-in.\n"
             "\n"
             "Options:\n"
@@ -74,7 +78,9 @@ if __name__ == "__main__" and {"-h", "--help", "--version"}.intersection(sys.arg
             "  -h, --help         Show this message and exit.\n"
             "  --version          Show the Shadowfetch Linux version and exit.\n"
             "\n"
-            "With no options it exits silently if setup has already been completed, and\n"
+            "The setup pages can open Shadowfetch Guide to check this computer without\n"
+            "uploading hardware identity. With no options it exits silently if setup\n"
+            "has already been completed, and\n"
             "otherwise opens the wizard. Installing anything is opt-in and confirmed\n"
             "inside the wizard; no option here installs software on its own. If a\n"
             "bundle was chosen offline, the process waits for connectivity and offers\n"
@@ -85,7 +91,7 @@ if __name__ == "__main__" and {"-h", "--help", "--version"}.intersection(sys.arg
 from PyQt6.QtCore import Qt, QSize, QTimer, QObject, pyqtSignal, pyqtSlot, QThread
 from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QStackedWidget, QCheckBox, QProgressBar,
     QFrame, QScrollArea, QRadioButton, QButtonGroup, QDialog, QMessageBox,
 )
@@ -109,6 +115,55 @@ MUTED      = "#9AA3AD"
 INK        = "#0B0E12"   # dark text on gold
 GREEN      = "#7FB069"
 RED        = "#E2533B"
+
+
+CODING_AGENTS = (
+    {
+        "key": "codex",
+        "name": "Codex",
+        "label": "OpenAI Codex CLI",
+        "description": "Verified user-level install. Sign in with ChatGPT after setup.",
+        "helper": "shadowfetch-codex",
+        "helper_tool": None,
+        "install_title": "Installing Codex CLI...",
+        "checking": "Checking the OpenAI release pin and installer...",
+        "receipt": "Codex CLI 0.148.0 passed its pinned installer and version checks.",
+    },
+    {
+        "key": "claude",
+        "name": "Claude Code",
+        "label": "Anthropic Claude Code",
+        "description": "Verified user-level install. Sign in with Claude after setup.",
+        "helper": "shadowfetch-code-agent",
+        "helper_tool": "claude",
+        "install_title": "Installing Claude Code...",
+        "checking": "Checking Anthropic's pinned Linux release...",
+        "receipt": "Claude Code 2.1.227 passed its artifact and version checks.",
+    },
+    {
+        "key": "grok",
+        "name": "Grok Build",
+        "label": "xAI Grok Build",
+        "description": "Verified user-level install. Sign in with xAI after setup.",
+        "helper": "shadowfetch-code-agent",
+        "helper_tool": "grok",
+        "install_title": "Installing Grok Build...",
+        "checking": "Checking xAI's pinned Grok CLI release...",
+        "receipt": "Grok Build CLI 1.0.5 passed its artifact and version checks.",
+    },
+    {
+        "key": "cursor",
+        "name": "Cursor Agent",
+        "label": "Cursor Agent",
+        "description": "Verified user-level install. Sign in with Cursor after setup.",
+        "helper": "shadowfetch-code-agent",
+        "helper_tool": "cursor",
+        "install_title": "Installing Cursor Agent...",
+        "checking": "Checking Cursor's pinned Linux release...",
+        "receipt": "Cursor Agent 2026.08.11-e8db854 passed its archive and version checks.",
+    },
+)
+CODING_AGENT_BY_KEY = {agent["key"]: agent for agent in CODING_AGENTS}
 
 
 def strip_terminal_escapes(value):
@@ -137,6 +192,26 @@ def detect_display_vendor(lspci_numeric):
         if preferred in detected:
             return preferred
     return "unknown"
+
+
+def open_system_guide():
+    """Open the native Guide surface, with a text fallback if it is absent."""
+    control = shutil.which("shadowfetch-control")
+    if control:
+        try:
+            subprocess.Popen([control, "--page", "guide"])
+            return True
+        except OSError:
+            pass
+    passport = shutil.which("shadowfetch-passport")
+    terminal = shutil.which("konsole") or shutil.which("x-terminal-emulator")
+    if passport and terminal:
+        try:
+            subprocess.Popen([terminal, "-e", passport])
+            return True
+        except OSError:
+            pass
+    return False
 
 CONFIG_DIR = Path.home() / ".config" / "shadowfetch"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -1171,6 +1246,11 @@ class IgnitionFlow(QWidget):
             ai_card.set_verdict("Scanning your hardware...")
 
         btns = QHBoxLayout()
+        guide = QPushButton("Check this computer")
+        guide.setFixedHeight(44)
+        guide.setToolTip("Open the private, read-only Shadowfetch System Passport")
+        guide.clicked.connect(open_system_guide)
+        btns.addWidget(guide)
         if self.mandatory:
             later = QPushButton("Decide later")
             later.setFixedHeight(44)
@@ -1704,7 +1784,8 @@ class CatalogPage(QWidget):
 
 # ---- pages ---------------------------------------------------------------
 class WelcomePage(QWidget):
-    def __init__(self, on_next, on_ignition=None, on_catalog=None):
+    def __init__(self, on_next, on_ignition=None, on_catalog=None,
+                 on_guide=None):
         super().__init__()
         lay = QVBoxLayout(self)
         lay.setContentsMargins(56, 56, 56, 48)
@@ -1726,8 +1807,10 @@ class WelcomePage(QWidget):
             "A fast, private, AI-ready desktop - honestly built on Debian and "
             "KDE Plasma 6.\nOn the default Btrfs install every update is snapshotted, "
             "so you can roll back a bad change with the built-in Btrfs Assistant.\n"
-            "Pick a setup profile, then optionally install Buzz. Buzz will rank and "
-            "download an open model from its Compute settings.",
+            "Shadowfetch Guide checks what works without uploading your computer's "
+            "identity. Then pick a setup profile and optionally install Buzz or one "
+            "or more coding agents. Buzz ranks and downloads an open model from its "
+            "Compute settings.",
             13, MUTED, wrap=True,
         )
 
@@ -1746,6 +1829,12 @@ class WelcomePage(QWidget):
         # Passive, non-modal Ignition badge: discovery survives 'Decide
         # later' without any full-screen re-offer (judge fold, nag rule).
         links = QHBoxLayout()
+        if on_guide is not None:
+            guide = QPushButton("Check this computer")
+            guide.setFixedHeight(38)
+            guide.setToolTip("Open the private, read-only Shadowfetch System Passport")
+            guide.clicked.connect(on_guide)
+            links.addWidget(guide)
         if on_ignition is not None:
             badge = QPushButton("Ignition - pick your flame  →")
             badge.setFixedHeight(38)
@@ -2211,7 +2300,7 @@ class AppsPage(QWidget):
 
 
 class BuzzPage(QWidget):
-    """Offer official Buzz and its native open-model flow."""
+    """Offer official Buzz, native open models, and optional coding agents."""
     def __init__(self, on_next):
         super().__init__()
         self._on_next = on_next
@@ -2219,11 +2308,12 @@ class BuzzPage(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(48, 40, 48, 32)
         lay.setSpacing(12)
-        lay.addWidget(_label("Buzz and open models", 22, TEXT, bold=True))
+        lay.addWidget(_label("Choose your AI workspace", 22, TEXT, bold=True))
         lay.addWidget(_label(
             "Buzz gives people and AI agents shared rooms, project context, and native shared "
             "compute. Shadowfetch installs the official desktop and a private relay. Buzz then "
-            "ranks open-source models for this hardware and asks before downloading one.",
+            "ranks open-source models for this hardware and asks before downloading one. "
+            "Cloud coding agents are separate, optional tools with their own sign-in.",
             12, MUTED, wrap=True))
         lay.addSpacing(6)
         self.group = QButtonGroup(self)
@@ -2247,6 +2337,37 @@ class BuzzPage(QWidget):
             row.addLayout(txt, 1)
             lay.addWidget(card)
 
+        agent_heading = QHBoxLayout()
+        agent_heading.addWidget(_label("Optional coding agents", 12, MUTED, bold=True))
+        agent_heading.addStretch(1)
+        self.select_all_agents = QCheckBox("Select all four")
+        self.select_all_agents.setChecked(False)
+        self.select_all_agents.toggled.connect(self._toggle_all_agents)
+        agent_heading.addWidget(self.select_all_agents)
+        lay.addLayout(agent_heading)
+
+        self.coding_agents = {}
+        agent_grid = QGridLayout()
+        agent_grid.setHorizontalSpacing(10)
+        agent_grid.setVerticalSpacing(10)
+        for index, agent in enumerate(CODING_AGENTS):
+            card = Card()
+            card.setMinimumHeight(88)
+            row = QHBoxLayout(card)
+            row.setContentsMargins(14, 10, 14, 10)
+            checkbox = QCheckBox()
+            checkbox.setChecked(False)
+            checkbox.toggled.connect(self._sync_select_all_agents)
+            text = QVBoxLayout()
+            text.setSpacing(2)
+            text.addWidget(_label(agent["label"], 12, GOLD, bold=True))
+            text.addWidget(_label(agent["description"], 10, MUTED, wrap=True))
+            row.addWidget(checkbox, 0, Qt.AlignmentFlag.AlignTop)
+            row.addLayout(text, 1)
+            self.coding_agents[agent["key"]] = checkbox
+            agent_grid.addWidget(card, index // 2, index % 2)
+        lay.addLayout(agent_grid)
+
         lay.addStretch(1)
         nxt = QPushButton("Continue  →")
         nxt.setFixedHeight(44)
@@ -2256,19 +2377,43 @@ class BuzzPage(QWidget):
     def _set(self, key):
         self.choice = key
 
+    def _toggle_all_agents(self, checked):
+        for checkbox in self.coding_agents.values():
+            checkbox.blockSignals(True)
+            checkbox.setChecked(checked)
+            checkbox.blockSignals(False)
+
+    def _sync_select_all_agents(self, _checked=None):
+        all_selected = all(checkbox.isChecked() for checkbox in self.coding_agents.values())
+        self.select_all_agents.blockSignals(True)
+        self.select_all_agents.setChecked(all_selected)
+        self.select_all_agents.blockSignals(False)
+
     def _submit(self):
-        self._on_next({"choice": self.choice})
+        coding_agents = {
+            key: checkbox.isChecked() for key, checkbox in self.coding_agents.items()
+        }
+        self._on_next({
+            "choice": self.choice,
+            "coding_agents": coding_agents,
+            "codex": coding_agents["codex"],
+        })
 
 
 class InstallPage(QWidget):
     def __init__(self, on_close):
         super().__init__()
         self.on_close = on_close
-        self.local_ai = {"choice": "none"}
+        self.local_ai = {"choice": "none", "coding_agents": {}}
         self.install_rc = 0
         self.buzz_state = "not-requested"
+        self.coding_agent_states = {
+            agent["key"]: "not-requested" for agent in CODING_AGENTS
+        }
+        self.active_coding_agent = None
         self.busy = False
         self.output_lines = []
+        self.failure_details = []
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(48, 48, 48, 40)
@@ -2289,7 +2434,7 @@ class InstallPage(QWidget):
         self.cancel_btn.setFixedHeight(44)
         self.cancel_btn.hide()
         self.cancel_btn.clicked.connect(self._cancel_setup)
-        self.skip_btn = QPushButton("Finish without Buzz")
+        self.skip_btn = QPushButton("Finish without optional AI tools")
         self.skip_btn.setFixedHeight(44)
         self.skip_btn.hide()
         self.skip_btn.clicked.connect(self._skip_buzz)
@@ -2306,7 +2451,20 @@ class InstallPage(QWidget):
     def start(self, accent_name, accent_hex, flatpak_ids, local_ai):
         self.local_ai = local_ai
         self.busy = True
-        self.buzz_state = "not-requested"
+        self.buzz_state = (
+            "pending" if local_ai.get("choice") == "install-buzz" else "not-requested"
+        )
+        selected_agents = local_ai.get("coding_agents")
+        if not isinstance(selected_agents, dict):
+            selected_agents = {"codex": bool(local_ai.get("codex"))}
+        self.coding_agent_states = {
+            agent["key"]: (
+                "pending" if selected_agents.get(agent["key"], False) else "not-requested"
+            )
+            for agent in CODING_AGENTS
+        }
+        self.active_coding_agent = None
+        self.failure_details = []
         self.done_btn.setEnabled(False)
         self.skip_btn.hide()
         self.cancel_btn.setEnabled(True)
@@ -2341,38 +2499,30 @@ class InstallPage(QWidget):
                 "The active download was stopped and no later optional apps were started. "
                 "Already completed installs were kept."
             )
-            if self.local_ai["choice"] == "install-buzz":
-                self.buzz_state = "failed"
-                self.done_btn.setText("Continue with Buzz")
-                self.skip_btn.show()
-            else:
-                self.done_btn.setText("Finish")
+            self.done_btn.setText("Continue setup")
+            self.skip_btn.show()
             self.done_btn.setEnabled(True)
             return
-        if self.local_ai["choice"] == "install-buzz":
+        self._start_next_ai()
+
+    def _start_next_ai(self):
+        if self.buzz_state == "pending":
             self._start_buzz_setup()
             return
-        self.title.setText("All set." if rc == 0 else "Some optional items did not install.")
-        self.bar.setRange(0, 1)
-        self.bar.setValue(1)
-        if rc != 0:
-            self.log.setText(
-                "One or more optional app installs failed, often because the network was "
-                "unavailable. You can finish now and retry them later from Discover.")
-            self.done_btn.setText("Finish anyway")
-        self.done_btn.setEnabled(True)
+        for agent in CODING_AGENTS:
+            if self.coding_agent_states[agent["key"]] == "pending":
+                self._start_coding_agent_setup(agent)
+                return
+        self._finalize_setup()
 
     def _start_buzz_setup(self):
         helper = shutil.which("shadowfetch-buzz")
         if not helper:
             self.buzz_state = "failed"
-            self.title.setText("Buzz setup is unavailable.")
-            self.log.setText(
-                "The shadowfetch-buzz helper is missing. Repair shadowfetch-defaults, "
-                "then retry.")
-            self.done_btn.setText("Retry Buzz")
-            self.done_btn.setEnabled(True)
-            self.skip_btn.show()
+            self.failure_details.append(
+                "Buzz: the shadowfetch-buzz helper is missing. Repair shadowfetch-defaults."
+            )
+            self._start_next_ai()
             return
         self.buzz_state = "installing"
         self.busy = True
@@ -2396,7 +2546,7 @@ class InstallPage(QWidget):
             self.log.setText("\n".join(self.output_lines))
 
     def _cancel_setup(self):
-        for name in ("buzz_worker", "worker"):
+        for name in ("coding_agent_worker", "buzz_worker", "worker"):
             worker = getattr(self, name, None)
             if worker is not None and worker.isRunning():
                 self.cancel_btn.setEnabled(False)
@@ -2412,38 +2562,178 @@ class InstallPage(QWidget):
         self.bar.setValue(1 if rc == 0 else 0)
         if rc == 0:
             self.buzz_state = "ready"
-            if self.install_rc == 0:
-                self.title.setText("Buzz is ready.")
-            else:
-                self.title.setText("Buzz is ready; some optional apps were skipped.")
-            self.log.setText(
-                "Official Buzz Desktop and the private relay passed every setup check. "
-                "Buzz will recommend an open-source model in its Compute settings.")
-            self.done_btn.setText("Open Buzz and finish")
-            self.skip_btn.hide()
         else:
             self.buzz_state = "failed"
-            self.title.setText("Buzz setup needs attention.")
             detail = "\n".join(self.output_lines[-5:]) or f"Setup exited with code {rc}."
-            self.log.setText(detail)
-            self.done_btn.setText("Retry Buzz")
+            self.failure_details.append(f"Buzz: {detail}")
+        if rc == 130:
+            self._show_interrupted("Buzz")
+            return
+        self._start_next_ai()
+
+    def _start_coding_agent_setup(self, agent):
+        helper = shutil.which(agent["helper"])
+        if not helper:
+            self.coding_agent_states[agent["key"]] = "failed"
+            self.failure_details.append(
+                f"{agent['name']}: the {agent['helper']} helper is missing. "
+                "Repair shadowfetch-defaults."
+            )
+            self._start_next_ai()
+            return
+        self.active_coding_agent = agent["key"]
+        self.coding_agent_states[agent["key"]] = "installing"
+        self.busy = True
+        self.output_lines = []
+        self.title.setText(agent["install_title"])
+        self.log.setText(agent["checking"])
+        self.bar.setRange(0, 0)
+        self.done_btn.setEnabled(False)
+        self.skip_btn.hide()
+        self.cancel_btn.setEnabled(True)
+        self.cancel_btn.show()
+        command = [helper]
+        if agent["helper_tool"]:
+            command.append(agent["helper_tool"])
+        command.extend(["setup", "--yes", "--no-open"])
+        self.coding_agent_worker = StreamingCommandWorker(command)
+        self.coding_agent_worker.progress.connect(self._coding_agent_progress)
+        self.coding_agent_worker.finished.connect(self._coding_agent_done)
+        self.coding_agent_worker.start()
+
+    def _coding_agent_progress(self, line):
+        if line:
+            self.output_lines.append(line)
+            self.output_lines = self.output_lines[-5:]
+            self.log.setText("\n".join(self.output_lines))
+
+    def _coding_agent_done(self, rc):
+        key = self.active_coding_agent
+        agent = CODING_AGENT_BY_KEY[key]
+        self.busy = False
+        self.cancel_btn.setEnabled(True)
+        self.cancel_btn.hide()
+        if rc == 0:
+            self.coding_agent_states[key] = "ready"
+        else:
+            self.coding_agent_states[key] = "failed"
+            detail = "\n".join(self.output_lines[-5:]) or f"Setup exited with code {rc}."
+            self.failure_details.append(f"{agent['name']}: {detail}")
+        self.active_coding_agent = None
+        if rc == 130:
+            self._show_interrupted(agent["name"])
+            return
+        self._start_next_ai()
+
+    def _show_interrupted(self, tool):
+        self.busy = False
+        self.cancel_btn.setEnabled(True)
+        self.cancel_btn.hide()
+        self.bar.setRange(0, 1)
+        self.bar.setValue(0)
+        self.title.setText(f"{tool} setup was cancelled.")
+        self.log.setText(
+            "The active download was stopped safely. Completed installs were kept; "
+            "continue to retry or finish without the remaining optional tools."
+        )
+        self.done_btn.setText("Continue setup")
+        self.done_btn.setEnabled(True)
+        self.skip_btn.show()
+
+    def _finalize_setup(self):
+        ready = []
+        if self.buzz_state == "ready":
+            ready.append(
+                "Buzz Desktop and its private local relay passed every setup check."
+            )
+        for agent in CODING_AGENTS:
+            if self.coding_agent_states[agent["key"]] == "ready":
+                ready.append(agent["receipt"])
+        if self.install_rc != 0:
+            ready.append(
+                "One or more optional desktop apps were skipped; retry them later from Discover."
+            )
+
+        failed = self.buzz_state == "failed" or any(
+            state == "failed" for state in self.coding_agent_states.values()
+        )
+        self.bar.setRange(0, 1)
+        self.bar.setValue(0 if failed else 1)
+        self.cancel_btn.hide()
+        if failed:
+            self.title.setText("Some optional AI tools need attention.")
+            self.log.setText("\n".join(ready + self.failure_details))
+            self.done_btn.setText("Retry failed tools")
             self.skip_btn.show()
+        else:
+            names = []
+            if self.buzz_state == "ready":
+                names.append("Buzz")
+            names.extend(
+                agent["name"] for agent in CODING_AGENTS
+                if self.coding_agent_states[agent["key"]] == "ready"
+            )
+            if len(names) > 1:
+                self.title.setText(f"{len(names)} optional tools are ready.")
+                ready.append("Launch any installed tool from the application menu.")
+            elif names:
+                self.title.setText(f"{names[0]} is ready.")
+            else:
+                self.title.setText(
+                    "All set." if self.install_rc == 0
+                    else "Some optional items did not install."
+                )
+            self.log.setText("\n".join(ready))
+            if len(names) == 1:
+                self.done_btn.setText(f"Open {names[0]} and finish")
+            else:
+                self.done_btn.setText("Finish")
+            self.skip_btn.hide()
         self.done_btn.setEnabled(True)
 
     def _finish(self):
-        if self.buzz_state == "failed":
-            self._start_buzz_setup()
-            return
         if self.busy:
             return
+        retry = False
+        if self.buzz_state == "failed":
+            self.buzz_state = "pending"
+            retry = True
+        for key, state in self.coding_agent_states.items():
+            if state == "failed":
+                self.coding_agent_states[key] = "pending"
+                retry = True
+        if retry or self.buzz_state == "pending" or any(
+            state == "pending" for state in self.coding_agent_states.values()
+        ):
+            self.failure_details = []
+            self._start_next_ai()
+            return
         WELCOME_DONE_FLAG.touch()
-        if self.buzz_state == "ready":
+        ready_agents = [
+            agent for agent in CODING_AGENTS
+            if self.coding_agent_states[agent["key"]] == "ready"
+        ]
+        ready_count = len(ready_agents) + (1 if self.buzz_state == "ready" else 0)
+        if ready_count == 1 and self.buzz_state == "ready":
             try:
                 subprocess.Popen(["shadowfetch-buzz", "open"])
             except OSError as error:
                 QMessageBox.warning(
                     self, "Buzz is installed",
                     f"Buzz setup succeeded, but it could not be opened automatically:\n\n{error}")
+        if ready_count == 1 and ready_agents:
+            agent = ready_agents[0]
+            command = [agent["helper"]]
+            if agent["helper_tool"]:
+                command.append(agent["helper_tool"])
+            command.append("open")
+            try:
+                subprocess.Popen(command)
+            except OSError as error:
+                QMessageBox.warning(
+                    self, f"{agent['name']} is installed",
+                    f"{agent['name']} setup succeeded, but it could not be opened "
+                    f"automatically:\n\n{error}")
         self.on_close()
 
     def _skip_buzz(self):
@@ -2508,7 +2798,7 @@ class ShadowfetchWelcome(QMainWindow):
         self.accent_hex = ACCENTS[0][1]
         self.profiles = []
         self.flatpaks = []
-        self.local_ai = {"choice": "none"}
+        self.local_ai = {"choice": "none", "coding_agents": {}}
 
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
@@ -2534,7 +2824,8 @@ class ShadowfetchWelcome(QMainWindow):
             lambda: self.stack.setCurrentWidget(self.profile),
             on_ignition=(lambda: self.stack.setCurrentWidget(self.flow))
             if show_badge else None,
-            on_catalog=lambda: self.stack.setCurrentWidget(self.catalog_page))
+            on_catalog=lambda: self.stack.setCurrentWidget(self.catalog_page),
+            on_guide=open_system_guide)
         self.profile = ProfilePage(self._got_profiles)
         self.wifi = WiFiPage(lambda: self.stack.setCurrentWidget(self.graphics))
         self.graphics = GraphicsPage(lambda: self.stack.setCurrentWidget(self.accent))
@@ -2634,17 +2925,27 @@ class SessionController(QObject):
             mode=mode, catalog_section=self.catalog_section, pending=pending,
             watcher=self.watcher, force=self.force)
         self.win.show()
+        if mode in ("ignition", "wizard"):
+            # Plasma's splash can take focus after an autostart window maps.
+            # Reclaim it once, after the splash has normally finished.
+            QTimer.singleShot(2500, self._activate_window)
+
+    def _activate_window(self):
+        win = self.win
+        if win is None or not win.isVisible():
+            return
+        try:
+            win.raise_()
+            win.activateWindow()
+        except Exception:  # noqa: BLE001
+            pass
 
     def _connectivity(self, online: bool):
         if online and self.win is None:
             pending = load_pending()
             if pending is not None:
                 self._show("ignition", pending=pending)
-                try:
-                    self.win.raise_()
-                    self.win.activateWindow()
-                except Exception:  # noqa: BLE001
-                    pass
+                self._activate_window()
 
     def _last_window_closed(self):
         self.win = None
