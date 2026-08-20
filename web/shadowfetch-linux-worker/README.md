@@ -20,9 +20,9 @@ The existing `shadowfetch-home` Worker handles `shadowfetch.com/` (the apps stud
 Bucket: `shadowfetch-linux` (bound as `RELEASES`).
 
 ```
-releases/shadowfetch-2.1.4-amd64.iso          (current/latest ISO body)
-releases/shadowfetch-2.1.4-amd64.iso.sha256   (matching checksum sidecar)
-releases/shadowfetch-2.1.4-amd64.iso.asc      (matching detached signature)
+releases/shadowfetch-2.1.5-amd64.iso          (current/latest ISO body)
+releases/shadowfetch-2.1.5-amd64.iso.sha256   (matching checksum sidecar)
+releases/shadowfetch-2.1.5-amd64.iso.asc      (matching detached signature)
 apt/dists/umbra/InRelease
 apt/dists/umbra/Release
 apt/dists/umbra/main/binary-amd64/Packages.gz

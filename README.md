@@ -1,9 +1,9 @@
-![Shadowfetch Linux Umbra desktop](https://www.shadowfetch.com/linux/assets/desktop-umbra.webp)
-![Shadowfetch Control Center](https://www.shadowfetch.com/linux/assets/control-center.webp)
+![Shadowfetch Linux 2.1.5 «Umbra» desktop](https://www.shadowfetchlinux.org/linux-assets/linux-2.1.5-desktop.webp)
+![Shadowfetch Guide and the private System Passport](https://www.shadowfetchlinux.org/linux-assets/linux-2.1.5-system-passport.webp)
 
-![Shadowfetch Welcome / Ignition Setup](https://www.shadowfetch.com/linux/assets/welcome.webp)
-![Shadowfetch application menu](https://www.shadowfetch.com/linux/assets/apps-menu.webp)
-![Firewatch and Phoenix Recovery](https://www.shadowfetch.com/linux/assets/agent-studio.webp)
+![Welcome and first-run setup](https://www.shadowfetchlinux.org/linux-assets/linux-2.1.5-welcome.webp)
+![Choose your AI workspace — Buzz and optional coding agents](https://www.shadowfetchlinux.org/linux-assets/linux-2.1.5-ai-workspace.webp)
+![Local AI in Control Center](https://www.shadowfetchlinux.org/linux-assets/linux-2.1.5-local-ai.webp)
 
 # Shadowfetch Linux — "Umbra" / Fire Edition
 
@@ -11,22 +11,19 @@
 
 It is an independent derivative that **builds on Debian rather than replacing it**: a curated KDE Plasma 6 (Wayland-first) desktop, a hand-picked creative stack, an in-house control surface, signed ISO releases, a signed APT repository, Btrfs snapshot safety, and an opt-in local-AI setup. It does not claim Debian endorsement — it stands on Debian's shoulders and states exactly what it adds.
 
-> **Current stable release: 2.1.4 "Umbra" Fire Edition** (2026-08-10, amd64)
+> **Current stable release: 2.1.5 "Umbra" Fire Edition** (2026-08-20, amd64)
 >
-> - ISO: `shadowfetch-2.1.4-amd64.iso` — 3.97 GB (3.70 GiB)
-> - SHA-256: `81a906788ec48150d4a4527b4d9e7b09a974d3d577f1bd32ba3f333df8a1a86b`
+> - ISO: `shadowfetch-2.1.5-amd64.iso` — 3.97 GB (3.70 GiB)
+> - SHA-256: `848f043e4d6f85c3607e7034ba911a1ce8b4a317674feebef8b07fcd8f531c24`
 > - APT suite / codename: `umbra`
 > - Signing-key fingerprint: `8F13 CE15 35EE 1F4A 2916  A1F7 3C5C 900B 7BE8 0CA1`
 > - Base: Debian testing · Desktop: KDE Plasma 6 · Boot: BIOS + UEFI (hybrid ISO)
-
-> **Development branch:** 2.1.5 Fire Edition. It is not released and has no
-> final ISO hash yet; progress is tracked in
-> [`docs/RELEASE-2.1.5.md`](docs/RELEASE-2.1.5.md).
 >
-> Its headline candidates are **Shadowfetch Guide**, a local-only System
-> Passport that checks what works without uploading machine identity, and a
-> first-run choices to install **OpenAI Codex CLI, Anthropic Claude Code, xAI
-> Grok Build, or Cursor Agent** beside the private Buzz and open-model path.
+> 2.1.5 adds **Shadowfetch Guide** — a local-only, read-only System Passport
+> that checks what works without uploading machine identity — guards Buzz on
+> Plasma Wayland, and offers first-run choices to install **OpenAI Codex CLI,
+> Anthropic Claude Code, xAI Grok Build, or Cursor Agent** beside the private
+> Buzz open-model path. See [`docs/RELEASE-2.1.5.md`](docs/RELEASE-2.1.5.md).
 
 ---
 
@@ -51,10 +48,10 @@ Shadowfetch Linux is young and honest about its rough edges. If you want a borin
 | **Phoenix Recovery** | Automatic **Btrfs restore points before every update, driver install and AI-stack change**, restorable in one click; GRUB snapshot-boot for recovery. |
 | **Fireproof Updates** | Updates are **simulated and re-verified before applying**; they refuse to run on low disk, an active package manager, or bad power; they take a pre/post snapshot pair and offer rollback if verification fails. |
 | **Ignition Setup** | First-boot system chooser: Core / Creator / Developer / AI Workstation / Full Flame. |
-| **Shadowfetch Guide (2.1.5 candidate)** | A read-only System Passport that explains graphics, network, audio, firmware, recovery and local-AI readiness before installation, then routes highlighted checks to the existing safe repair tools afterward. |
-| **Local AI via Buzz** | Opt-in and **consent-gated**. Buzz surveys the hardware, recommends an open model, downloads it **only after confirmation**, and serves it on a **loopback-only** shared-compute endpoint. Nothing is fetched until you confirm in Settings → Compute. (2.1.4 verifies Buzz Desktop 0.5.8 by SHA-256 before installing.) |
-| **Optional coding agents (2.1.5 candidate)** | Four unchecked first-run choices install release-pinned Codex, Claude Code, Grok Build, or Cursor Agent for the desktop user. Every selected artifact is verified independently; each tool owns its sign-in, and no account credential is embedded in or copied by Shadowfetch. |
-| **NVIDIA graphics path** | 2.1.4 verifies NVIDIA's Debian 13 keyring and uses `nvidia-driver-assistant` with **simulate-first, `--no-remove`, and Phoenix snapshots** — validated against a physical RTX 5060 Ti. Intel/AMD use the normal Mesa stack. |
+| **Shadowfetch Guide** | A read-only System Passport that explains graphics, network, audio, firmware, recovery and local-AI readiness before installation, then routes highlighted checks to the existing safe repair tools afterward. |
+| **Local AI via Buzz** | Opt-in and **consent-gated**. Buzz surveys the hardware, recommends an open model, downloads it **only after confirmation**, and serves it on a **loopback-only** shared-compute endpoint. Nothing is fetched until you confirm in Settings → Compute. (2.1.5 verifies Buzz Desktop 0.5.17 by SHA-256 before installing.) |
+| **Optional coding agents** | Four unchecked first-run choices install release-pinned Codex, Claude Code, Grok Build, or Cursor Agent for the desktop user. Every selected artifact is verified independently; each tool owns its sign-in, and no account credential is embedded in or copied by Shadowfetch. |
+| **NVIDIA graphics path** | 2.1.5 verifies NVIDIA's Debian 13 keyring and uses `nvidia-driver-assistant` with **simulate-first, `--no-remove`, and Phoenix snapshots** — validated against a physical RTX 5060 Ti. Intel/AMD use the normal Mesa stack. |
 | **Browser Migration** | Validates bookmark-HTML and password-CSV exports before staging/import. (Never attach a password CSV to a bug report.) |
 | **Signed everything** | Signed ISO, signed reprepro APT repo, public signing key, public verification instructions. |
 
@@ -65,13 +62,13 @@ Shadowfetch Linux is young and honest about its rough edges. If you want a borin
 These commands download the current ISO, its checksum, its detached signature and the signing key, then verify authenticity and integrity. **They do not write to a USB stick.**
 
 ```sh
-curl -LO https://www.shadowfetch.com/linux/download/shadowfetch-2.1.4-amd64.iso
-curl -LO https://www.shadowfetch.com/linux/download/shadowfetch-2.1.4-amd64.iso.sha256
-curl -LO https://www.shadowfetch.com/linux/download/shadowfetch-2.1.4-amd64.iso.asc
+curl -LO https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso
+curl -LO https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso.sha256
+curl -LO https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso.asc
 curl -LO https://www.shadowfetch.com/linux/shadowfetch.gpg.asc
 gpg --import shadowfetch.gpg.asc \
-  && gpg --verify shadowfetch-2.1.4-amd64.iso.asc shadowfetch-2.1.4-amd64.iso \
-  && sha256sum -c shadowfetch-2.1.4-amd64.iso.sha256
+  && gpg --verify shadowfetch-2.1.5-amd64.iso.asc shadowfetch-2.1.5-amd64.iso \
+  && sha256sum -c shadowfetch-2.1.5-amd64.iso.sha256
 ```
 
 A GPG *"not certified with a trusted signature"* warning only means you have not personally trusted the key — it is **not** a failed signature. Compare the fingerprint before you trust the download:
@@ -80,13 +77,13 @@ A GPG *"not certified with a trusted signature"* warning only means you have not
 
 **Mirrors (same ISO, same checksums):**
 - Primary: https://www.shadowfetchlinux.org/download
-- Archive.org: https://archive.org/details/shadowfetch-linux-2-1-4 (ISO, `SHA256SUMS`, `.asc`, torrent)
+- Archive.org: https://archive.org/details/shadowfetch-linux-2-1-5 (ISO, `SHA256SUMS`, `.asc`, torrent)
 
 **Guides:** [Install](https://www.shadowfetchlinux.org/install) · [Verify](https://www.shadowfetchlinux.org/verify) · [Security model](https://www.shadowfetchlinux.org/security) · [Known issues](https://www.shadowfetchlinux.org/known-issues)
 
 ### Writing the USB stick
 
-Write the verified ISO to a USB device with an image writer (balenaEtcher, KDE ISO Image Writer, GNOME Disks) or `dd` — **do not** copy it onto a mounted filesystem. 2.1.4 is under the 4 GiB FAT32 single-file limit, so a FAT32 stick also works, but an image writer is still the recommended path.
+Write the verified ISO to a USB device with an image writer (balenaEtcher, KDE ISO Image Writer, GNOME Disks) or `dd` — **do not** copy it onto a mounted filesystem. 2.1.5 is under the 4 GiB FAT32 single-file limit, so a FAT32 stick also works, but an image writer is still the recommended path.
 
 ### The live session
 
@@ -209,6 +206,6 @@ Shadowfetch Linux is an **aggregate**: the ISO bundles many upstream Debian pack
 
 ## Release notes & links
 
-- Stable: [`docs/RELEASE-2.1.4.md`](docs/RELEASE-2.1.4.md) · in development: [`docs/RELEASE-2.1.5.md`](docs/RELEASE-2.1.5.md)
+- Current: [`docs/RELEASE-2.1.5.md`](docs/RELEASE-2.1.5.md) · previous: [`docs/RELEASE-2.1.4.md`](docs/RELEASE-2.1.4.md)
 - [Download](https://www.shadowfetchlinux.org/download) · [Verify](https://www.shadowfetchlinux.org/verify) · [Install](https://www.shadowfetchlinux.org/install) · [Security](https://www.shadowfetchlinux.org/security) · [Known issues](https://www.shadowfetchlinux.org/known-issues) · [Docs](https://www.shadowfetchlinux.org/docs)
 - Changelog / release feed: https://www.shadowfetchlinux.org/releases.json

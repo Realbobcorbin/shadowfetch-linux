@@ -2,12 +2,17 @@
 
 Codename: Umbra
 
-Status: IN DEVELOPMENT. The public stable release remains 2.1.4 until every
-required item in `qa/2.1.5/acceptance.json` has fresh evidence from the final
-2.1.5 ISO and all public files pass independent download verification.
+Status: RELEASED 2026-08-20. Every required prepublication case in
+`qa/2.1.5/acceptance.json` passed against the exact final ISO recorded below,
+and the public artifacts were verified after publication.
 
-No final ISO hash, size, detached signature, evidence-bundle hash, release date,
-or public download claim exists yet.
+- ISO: `shadowfetch-2.1.5-amd64.iso`
+- Size: 3,968,471,040 bytes (3.97 GB / 3.70 GiB)
+- SHA-256: `848f043e4d6f85c3607e7034ba911a1ce8b4a317674feebef8b07fcd8f531c24`
+- Detached signature: `shadowfetch-2.1.5-amd64.iso.asc`
+- Signing key: `8F13 CE15 35EE 1F4A 2916  A1F7 3C5C 900B 7BE8 0CA1`
+- Download: https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso
+- Canonical website: https://www.shadowfetchlinux.org  ·  Mirror: https://archive.org/details/shadowfetch-linux-2-1-5
 
 ## Release goal
 

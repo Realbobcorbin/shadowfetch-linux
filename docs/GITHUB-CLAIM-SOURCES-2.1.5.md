@@ -6,9 +6,8 @@ checked source and exact-artifact evidence. Development work is not a release.
 ## Release state
 
 - Development target: Shadowfetch Linux 2.1.5 Fire Edition, codename `umbra`.
-- Public stable release: 2.1.4.
-- No 2.1.5 hash, signature, size, availability, or PASS claim is valid until the
-  final ISO and every required prepublication case are independently verified.
+- Public stable release: 2.1.5 «Umbra» (released 2026-08-20; ISO sha256 848f043e…, verified on shadowfetch.com, shadowfetchlinux.org, GitHub release v2.1.5, and archive.org/details/shadowfetch-linux-2-1-5).
+- All 2.1.5 required prepublication cases passed against the final ISO and the public artifacts were independently re-verified (35/35 in `qa/2.1.5/acceptance.json`).
 
 ## Authoritative sources
 
