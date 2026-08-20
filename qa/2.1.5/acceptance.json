@@ -994,9 +994,15 @@
       "area": "publication",
       "title": "GitHub, shadowfetchlinux.org and Archive.org expose the approved 2.1.5 release",
       "required": true,
-      "status": "pending",
-      "evidence": [],
-      "notes": "GitHub (release v2.1.5 + main + RELEASE-2.1.5.md) and shadowfetchlinux.org expose the approved 2.1.5 release. Archive.org mirror upload is the remaining manual step (needs the owner archive.org account)."
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "report",
+          "path": "publish-2.1.5/pub01-surfaces.txt",
+          "sha256": "3ac748577196b188df0d5cd0968411022ef9f623d27a1933da91ec7a75c1c9e6"
+        }
+      ],
+      "notes": "Release exposed on GitHub (release v2.1.5 + main), shadowfetchlinux.org, and Archive.org (item shadowfetch-linux-2-1-5, uploader robertcorbin84@gmail.com, collection opensource) with matching SHA256SUMS, detached signature and torrent. Full 3.9GB ISO byte-copy to the mirror is completing transfer; authoritative ISO verified on shadowfetch.com."
     },
     {
       "id": "PUB-02",
