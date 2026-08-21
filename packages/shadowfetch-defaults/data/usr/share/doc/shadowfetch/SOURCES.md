@@ -31,12 +31,14 @@ Official documentation is linked from `CODING-AGENTS.md`.
 ### Written offer for corresponding source
 
 The complete corresponding source for the Shadowfetch packages of THIS release
-is published as a signed tarball alongside the release:
+is published in the signed APT repository's `main/source` component, and in
+this project's public git tree:
 
-    https://shadowfetch.com/linux/apt/sources/shadowfetch-source-2.1.5.tar.gz
+    https://github.com/ShadowfetchLinux/shadowfetch-linux
+    https://www.shadowfetch.com/linux/apt/dists/umbra/main/source/
 
-Its SHA-256 is published next to it (…tar.gz.sha256). The project's public home
-and issue tracker are at https://github.com/ShadowfetchLinux/shadowfetch-linux .
-For the corresponding source of any upstream Debian/KDE component shipped in
-this image, email signing@shadowfetch.com and we will provide the exact source
-for the version shipped, at no more than the cost of distribution.
+Enable the source component and fetch a package with `apt-get source`, for
+example `apt-get source shadowfetch-welcome`. For the corresponding source of
+any upstream Debian/KDE component shipped in this image, email
+shadowfetchlinux@gmail.com and we will provide the exact source for the version
+shipped, at no more than the cost of distribution.

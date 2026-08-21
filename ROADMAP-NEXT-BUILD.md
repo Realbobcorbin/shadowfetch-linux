@@ -1,5 +1,10 @@
 # Shadowfetch Linux — Next-Build Idea Backlog (post-1.0.6)
 
+> **Historical.** Compiled 2026-05-29 against 1.0.6. It is not the 2.1.5 plan.
+> Several items below (local AI, Btrfs snapshots, Calamares) later shipped in a
+> different form. Current direction: [`docs/FIRE_ROADMAP.md`](docs/FIRE_ROADMAP.md)
+> and https://www.shadowfetchlinux.org/roadmap.
+
 *Compiled 2026-05-29 from Reddit research across r/linux, r/linux4noobs, r/DistroHopping, r/unixporn, r/kde, r/linux_gaming, r/privacy, r/debian, r/selfhosted (4 parallel research sweeps). Filtered against what 1.0.6 "Umbra" already ships. Tags: **Impact** (★ demand) · **Effort** (E/M/H) · 🜂 = strong Shadowfetch brand fit.*
 
 > **Hard constraint to respect:** 1.0.6's squashfs is already **3.1 GiB of the 4 GiB limit**. Heavy additions (Steam+Proton-GE ≈2 GB, AI tooling, models) must be **first-boot downloads via the Welcome app, NOT baked into the ISO** — both to stay under 4 GiB and to keep the image lean. This shapes the whole plan: bake *config*, download *bulk*.

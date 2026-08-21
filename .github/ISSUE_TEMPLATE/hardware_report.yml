@@ -6,8 +6,16 @@ body:
   - type: markdown
     attributes:
       value: |
-        Hardware reports help build the community test matrix. Use Discussions for support questions before opening a bug.
+        Hardware reports help build the community test matrix. Reproducible bugs belong on the Bug report form.
         Do not attach secrets, password CSVs, or unredacted private diagnostics.
+  - type: input
+    id: iso
+    attributes:
+      label: ISO filename
+      description: Exact ISO filename you downloaded or installed from.
+      placeholder: shadowfetch-2.1.5-amd64.iso
+    validations:
+      required: true
   - type: input
     id: computer_model
     attributes:

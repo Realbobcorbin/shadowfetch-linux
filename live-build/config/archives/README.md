@@ -7,8 +7,9 @@ and tears it down on exit.
 
 `shadowfetch.list.binary` is the apt sources entry that ships *inside*
 the final ISO, pointing at the public APT repo at
-`https://shadowfetch.com/linux/apt/`. End users get incremental updates
-through that URL.
+`https://www.shadowfetch.com/linux/apt`. End users get incremental updates
+through that URL. Human-facing docs live on https://www.shadowfetchlinux.org ;
+do not point apt at the `.org` host.
 
 The matching `.key.chroot` / `.key.binary` files (GPG public key, armored)
 are copied here by `make iso` from `repo/shadowfetch.gpg.asc`. They're

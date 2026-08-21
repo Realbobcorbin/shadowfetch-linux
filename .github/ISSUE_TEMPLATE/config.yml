@@ -1,11 +1,11 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-  - name: Support questions and install help
-    url: https://github.com/ShadowfetchLinux/shadowfetch-linux/discussions
-    about: Use Discussions for questions, install reports, and hardware notes that are not reproducible bugs.
   - name: Verification guide
     url: https://www.shadowfetchlinux.org/verify
     about: Verify the ISO checksum, detached signature, and signing key before installing.
   - name: Security model
     url: https://www.shadowfetchlinux.org/security
-    about: Read the Shadowfetch Linux security model and reporting guidance.
+    about: Read the Shadowfetch Linux security model. Report vulnerabilities privately to shadowfetchlinux@gmail.com.
+  - name: Canonical website
+    url: https://www.shadowfetchlinux.org
+    about: Download page, install guide, known issues, and the current 2.1.5 release notes.

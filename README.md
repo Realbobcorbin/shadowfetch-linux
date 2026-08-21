@@ -59,6 +59,8 @@ Shadowfetch Linux is young and honest about its rough edges. If you want a borin
 
 ## Verify first, then install
 
+Guides live on **https://www.shadowfetchlinux.org**. The signed ISO, checksum sidecar, detached signature, GPG key, and APT repo are served from the freeze host **https://www.shadowfetch.com/linux/** — that is the path that actually returns the 3.97 GB image (the `.org` site does not host the ISO bytes).
+
 These commands download the current ISO, its checksum, its detached signature and the signing key, then verify authenticity and integrity. **They do not write to a USB stick.**
 
 ```sh
@@ -75,8 +77,13 @@ A GPG *"not certified with a trusted signature"* warning only means you have not
 
 `8F13 CE15 35EE 1F4A 2916  A1F7 3C5C 900B 7BE8 0CA1`
 
+The same checksum is recorded in [`SHA256SUMS`](SHA256SUMS) in this repository. The public key copy is [`shadowfetch-release.asc`](shadowfetch-release.asc).
+
+**GitHub Releases do not attach the ISO.** GitHub's per-file limit is 2 GiB; this image is 3.97 GB. Tag [v2.1.5](https://github.com/ShadowfetchLinux/shadowfetch-linux/releases/tag/v2.1.5) is the source snapshot plus release notes. Download the image from the freeze host above, or from a mirror.
+
 **Mirrors (same ISO, same checksums):**
-- Primary: https://www.shadowfetchlinux.org/download
+- Download page: https://www.shadowfetchlinux.org/download
+- Freeze host ISO: https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso
 - Archive.org: https://archive.org/details/shadowfetch-linux-2-1-5 (ISO, `SHA256SUMS`, `.asc`, torrent)
 
 **Guides:** [Install](https://www.shadowfetchlinux.org/install) · [Verify](https://www.shadowfetchlinux.org/verify) · [Security model](https://www.shadowfetchlinux.org/security) · [Known issues](https://www.shadowfetchlinux.org/known-issues)
@@ -185,13 +192,14 @@ See [`SECURITY.md`](SECURITY.md), the [security model](https://www.shadowfetchli
 
 ## Support & contributing
 
-- **GitHub Issues** — bugs, installation reports, hardware notes, and patches: https://github.com/ShadowfetchLinux/shadowfetch-linux/issues
+- **GitHub Issues** — bugs, installation reports, hardware notes, and patches: https://github.com/ShadowfetchLinux/shadowfetch-linux/issues (use the Bug report or Hardware report form)
+- **Contributing** — [`CONTRIBUTING.md`](CONTRIBUTING.md). Run `make source-gate` before opening a pull request.
 
 A good **bug report** includes: exact ISO filename and whether the checksum matched; UEFI vs legacy BIOS and Secure Boot state; CPU/GPU/RAM/disk layout/Wi-Fi chipset; for installer failures, where Calamares stopped and whether the live session worked; and redacted `shadowfetch-health --json` output.
 
 A good **hardware report** includes: computer model + firmware/boot mode; CPU/GPU/RAM/storage/Wi-Fi/Bluetooth; whether the live session booted; and whether install, first login, updates, local-AI setup, audio, Wi-Fi, Bluetooth, suspend/resume and GPU acceleration worked — plus anything you had to change by hand.
 
-Pull requests to the build scripts, packages, docs and Worker are welcome. Run `make source-gate` before submitting. By contributing you agree your changes ship under the project's licenses (below).
+Pull requests to the build scripts, packages, docs and Worker are welcome. By contributing you agree your changes ship under the project's licenses (below).
 
 ---
 
@@ -207,5 +215,6 @@ Shadowfetch Linux is an **aggregate**: the ISO bundles many upstream Debian pack
 ## Release notes & links
 
 - Current: [`docs/RELEASE-2.1.5.md`](docs/RELEASE-2.1.5.md) · previous: [`docs/RELEASE-2.1.4.md`](docs/RELEASE-2.1.4.md)
+- GitHub tag notes (paste template): [`docs/GITHUB-RELEASE.md`](docs/GITHUB-RELEASE.md)
 - [Download](https://www.shadowfetchlinux.org/download) · [Verify](https://www.shadowfetchlinux.org/verify) · [Install](https://www.shadowfetchlinux.org/install) · [Security](https://www.shadowfetchlinux.org/security) · [Known issues](https://www.shadowfetchlinux.org/known-issues) · [Docs](https://www.shadowfetchlinux.org/docs)
 - Changelog / release feed: https://www.shadowfetchlinux.org/releases.json

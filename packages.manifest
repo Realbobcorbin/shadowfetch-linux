@@ -1,3 +1,5 @@
+# Historical 2.1.1 reprepro listing. Not the current 2.1.5 inventory.
+# Current package versions are 2.1.5-1 (see packages/*/debian/changelog).
   umbra|main|amd64: grub-btrfs 4.14-1shadowfetch1
   umbra|main|amd64: shadowfetch-branding 2.1.1-1
   umbra|main|amd64: shadowfetch-creative-base 2.1.1-1

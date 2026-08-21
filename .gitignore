@@ -110,3 +110,20 @@ packages/shadowfetch-welcome/debian/shadowfetch-welcome/
 # QA evidence + release scratch (regenerable; matches the /work/qa-2.1.4 precedent)
 /work/
 /live-build/binary.contents
+
+# Release blobs that must not land in git (ISO bodies already match *.iso)
+*.torrent
+*.iso.torrent
+
+# Extra Debian binary leftovers
+*.udeb
+*.ddeb
+
+# OpenPGP private material. Public ASCII-armored keys (shadowfetch-release.asc,
+# SHA256SUMS.asc) are committed on purpose.
+private-keys-v1.d/
+openpgp-revocs.d/
+secring.*
+*.secret.asc
+id_rsa
+id_ed25519
