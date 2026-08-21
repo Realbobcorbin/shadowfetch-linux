@@ -1,19 +1,21 @@
 # shadowfetch-linux Worker
 
-Cloudflare Worker that serves the `shadowfetch.com/linux/*` subtree:
+Cloudflare Worker that serves **signed artifacts** under `shadowfetch.com/linux/*`.
 
-- `/linux/` — landing page (auto-detects latest ISO in R2 and surfaces it)
-- `/linux/download` — download page with checksum + signature instructions
+Human-facing pages (download, verify, install, changelog, `releases.json`) are
+canonical on **https://www.shadowfetchlinux.org**. In production those
+`/linux/...` HTML routes 301 there. This Worker still owns:
+
 - `/linux/download/<filename>` — streams from R2 `releases/<filename>` (Range-supporting)
-- `/linux/install` — install guide (Calamares walkthrough + add-to-existing-Debian flow)
-- `/linux/docs` — documentation index for install, verification, hardware, security, recovery, and release notes
-- `/linux/changelog` — release notes
-- `/linux/releases.json` — machine-readable metadata for the current signed release
-- `/linux/releases.atom.xml` — Atom feed containing the current signed release
 - `/linux/shadowfetch.gpg.asc` — public signing key (also at `/linux/apt/shadowfetch.gpg.asc` for `signed-by=`)
 - `/linux/apt/...` — APT repo proxy, passes through R2 `apt/...` (reprepro output)
 
-The existing `shadowfetch-home` Worker handles `shadowfetch.com/` (the apps studio). It is **not modified** by this Worker — Cloudflare's most-specific route match means `/linux*` lands here and everything else still goes to shadowfetch-home.
+HTML page handlers remain in `src/index.js` for local `wrangler dev` and as a
+fallback. Do not treat them as the public site; the Astro site on
+shadowfetchlinux.org is current (2.1.5 / Buzz). The in-Worker copy still
+describes older local-AI wording in places and is not the reviewer surface.
+
+The existing `shadowfetch-home` Worker handles `shadowfetch.com/` (the apps studio). It is **not modified** by this Worker.
 
 ## R2 layout
 

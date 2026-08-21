@@ -30,9 +30,9 @@ license does not grant rights to those downloaded products.
 
 The complete corresponding source for the Shadowfetch packages is:
   * published at https://github.com/ShadowfetchLinux/shadowfetch-linux
-  * available as a source tarball at
-      https://shadowfetch.com/linux/apt/sources/shadowfetch-source-2.1.5.tar.gz
+  * published in the signed APT `main/source` component at
+      https://www.shadowfetch.com/linux/apt/dists/umbra/main/source/
 
 For source of any upstream Debian/KDE component, contact
-signing@shadowfetch.com and we will direct you to, or provide, the exact
+shadowfetchlinux@gmail.com and we will direct you to, or provide, the exact
 corresponding source for the version shipped.

@@ -6,14 +6,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use Discussions for support questions. Use this form for reproducible bugs.
+        Use this form for reproducible bugs. Hardware compatibility notes belong on the Hardware report form.
         Do not attach password CSVs, secrets, tokens, or unredacted private logs.
   - type: input
     id: iso
     attributes:
       label: ISO filename
       description: Exact ISO filename you downloaded or installed from.
-      placeholder: shadowfetch-2.1.1-amd64.iso
+      placeholder: shadowfetch-2.1.5-amd64.iso
     validations:
       required: true
   - type: dropdown

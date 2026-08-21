@@ -99,6 +99,27 @@ jobs:
           npm install -g wrangler
           cd web/shadowfetch-linux-worker && wrangler deploy
 
+      - name: Compose GitHub release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=$(awk '/^VERSION[[:space:]]*\?=/{print $3; exit}' Makefile)
+          ISO="shadowfetch-${VERSION}-amd64.iso"
+          SHA=$(awk '{print $1; exit}' "${ISO}.sha256")
+          cat > /tmp/github-release-body.md <<EOF
+          GitHub does not host the ISO (this image is larger than GitHub's 2 GiB per-file limit). Download the signed image from the freeze host, then verify it.
+
+          - **ISO:** https://www.shadowfetch.com/linux/download/${ISO}
+          - **SHA-256:** \`${SHA}\`
+          - **Checksum sidecar:** https://www.shadowfetch.com/linux/download/${ISO}.sha256
+          - **Signature:** https://www.shadowfetch.com/linux/download/${ISO}.asc
+          - **Signing key:** https://www.shadowfetch.com/linux/shadowfetch.gpg.asc
+          - **Fingerprint:** \`8F13 CE15 35EE 1F4A 2916  A1F7 3C5C 900B 7BE8 0CA1\`
+          - **Verify guide:** https://www.shadowfetchlinux.org/verify
+          - **Download page:** https://www.shadowfetchlinux.org/download
+
+          This draft also attaches the small \`.iso.sha256\` and \`.iso.asc\` files. Do not attach the ISO itself.
+          EOF
+
       - name: Create GitHub release on tag
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -108,10 +129,7 @@ jobs:
           name: ${{ github.ref_name }}
           draft: true
           generate_release_notes: true
-          body: |
-            The signed ISO is hosted on Shadowfetch's release storage because
-            GitHub release assets have a 2 GiB per-file limit. Verify the R2
-            download with the attached checksum and detached signature.
+          body_path: /tmp/github-release-body.md
           files: |
             *.iso.sha256
             *.iso.asc

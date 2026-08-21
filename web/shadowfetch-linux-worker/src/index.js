@@ -1,5 +1,10 @@
-// shadowfetch.com/linux/* — landing + download + APT repo proxy
+// shadowfetch.com/linux/* — signed ISO/APT artifact proxy (R2)
 // Bindings: RELEASES (R2 bucket "shadowfetch-linux")
+//
+// Human-facing pages are canonical on https://www.shadowfetchlinux.org .
+// Production 301s /linux HTML routes there. This file still contains HTML
+// fallbacks for wrangler dev; artifact routes (/linux/download/*, /linux/apt/*,
+// /linux/shadowfetch.gpg.asc) are what production uses.
 //
 // R2 layout:
 //   releases/shadowfetch-<version>-amd64.iso
@@ -13,7 +18,7 @@ const GPG_FINGERPRINT = "8F13CE1535EE1F4A2916A1F73C5C900B7BE80CA1";
 const SHADOWFETCH_211_TORRENT_ALIAS =
   "/linux/download/shadowfetch-2.1.1-amd64.iso.torrent";
 const SHADOWFETCH_211_TORRENT_RELEASE =
-  "https://github.com/Realbobcorbin/shadowfetch-linux/releases/download/v2.1.1/shadowfetch-2.1.1-amd64.iso.torrent";
+  "https://archive.org/download/shadowfetch-linux-2-1-1/shadowfetch-2.1.1-amd64.iso.torrent";
 
 // The raw download stats at /linux/_stats are gated behind a secret. Set it once:
 //   wrangler secret put STATS_TOKEN
@@ -665,7 +670,7 @@ function humanBytes(n) {
 
 const SITE = "https://www.shadowfetch.com";
 const OG_IMAGE = SITE + "/linux/assets/sf-logo-nav.png";
-const SITE_BUILD = "2026.08.11.1";
+const SITE_BUILD = "2026.08.21.1";
 const CLOUDFLARE_WEB_ANALYTICS_TOKEN = "1433629b72d147acb61f41a951d81de1";
 const DEFAULT_DESC = "Shadowfetch Linux (Umbra) — a private, AI-ready creative workstation built honestly on Debian. KDE Plasma 6, themed in shadow and gold, local AI built in, every creative tool ready out of the box.";
 

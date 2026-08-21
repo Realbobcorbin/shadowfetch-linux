@@ -11,8 +11,13 @@ and the public artifacts were verified after publication.
 - SHA-256: `848f043e4d6f85c3607e7034ba911a1ce8b4a317674feebef8b07fcd8f531c24`
 - Detached signature: `shadowfetch-2.1.5-amd64.iso.asc`
 - Signing key: `8F13 CE15 35EE 1F4A 2916  A1F7 3C5C 900B 7BE8 0CA1`
-- Download: https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso
-- Canonical website: https://www.shadowfetchlinux.org  ·  Mirror: https://archive.org/details/shadowfetch-linux-2-1-5
+- Canonical website: https://www.shadowfetchlinux.org
+- Download page: https://www.shadowfetchlinux.org/download
+- Signed ISO (freeze host; this is the URL that returns the image bytes): https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso
+- Checksum sidecar: https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso.sha256
+- Detached signature: https://www.shadowfetch.com/linux/download/shadowfetch-2.1.5-amd64.iso.asc
+- Signing key: https://www.shadowfetch.com/linux/shadowfetch.gpg.asc (also https://www.shadowfetchlinux.org/shadowfetch.gpg.asc)
+- Mirror: https://archive.org/details/shadowfetch-linux-2-1-5
 
 ## Release goal
 
